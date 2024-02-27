@@ -1,0 +1,10 @@
+CI_VERSION : 2.0.104
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.nomad.dd-monitor
+CONTAINER_IMAGE: cv-dd-agent
+SERVICE_NAME: nomad_service
+BUILD_TYPE: NOMAD_SERVICE
+SKIP_TEST: true
+LOGLEVEL: ERROR
+MASTER_REPO: devops.nomad.dd-monitor
+CONTAINER_TAGS: nomad

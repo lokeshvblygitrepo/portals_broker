@@ -1,0 +1,269 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concourseci.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+    get_params: { skip_download: true }
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concourseci.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+    get_params: { skip_download: true }
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+
+- name: resource-devops.ci
+  type: git
+  check_timeout: 5m
+  check_every: 10m
+  source:
+    uri: git@bitbucket.org:corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    private_key: ((bitbucket-ssh))
+
+- name: DEV
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT)).git
+    branch: develop
+    private_key: ((bitbucket-ssh))
+
+- name: QA
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT)).git
+    branch: qa
+    private_key: ((bitbucket-ssh))
+
+- name: STAGE
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT)).git
+    branch: stage
+    private_key: ((bitbucket-ssh))
+
+- name: MASTER
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT)).git
+    branch: master
+    private_key: ((bitbucket-ssh))
+
+- name: resource-elastic-monitor
+  type: docker-image
+  check_timeout: 5m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/ks-elastic-monitor
+    tag: 1.13.6-alpine3.11
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+groups:
+- name: development
+  jobs:
+  - Deploy Elastic search monitor to DEV
+
+- name: test
+  jobs:
+  - Deploy Elastic search monitor to QA
+
+- name: stage
+  jobs:
+  - Deploy Elastic search monitor to STAGE
+  - Deploy Elastic search monitor to TRAIN
+
+- name: production
+  jobs:
+  - Deploy Elastic search monitor to PREProd
+  - Deploy Elastic search monitor to Production
+
+
+jobs:
+- name: Deploy Elastic search monitor to QA
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: resource-elastic-monitor
+      - get: QA
+        trigger: true
+
+    - task: deploy-es-monitor-to-qa
+      privileged: true
+      image: resource-elastic-monitor
+      file: resource-devops.ci/tasks/elasticmonitor.yml
+      input_mapping: {CODE: QA}
+      params:
+        ENV: qa
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((QA_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((QA_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ES_DOMAIN_URL: ((QA_ES_DOMAIN_URL))
+
+- name: Deploy Elastic search monitor to STAGE
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: resource-elastic-monitor
+      - get: STAGE
+        trigger: true
+
+    - task: deploy-es-monitor-to-stage
+      privileged: true
+      image: resource-elastic-monitor
+      file: resource-devops.ci/tasks/elasticmonitor.yml
+      input_mapping: {CODE: STAGE}
+      params:
+        ENV: staging
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((STAGE_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((STAGE_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ES_DOMAIN_URL: ((STAGE_ES_DOMAIN_URL))
+
+- name: Deploy Elastic search monitor to TRAIN
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: resource-elastic-monitor
+      - get: STAGE
+        trigger: true
+        passed: [Deploy Elastic search monitor to STAGE]
+
+    - task: deploy-es-monitor-to-train
+      privileged: true
+      image: resource-elastic-monitor
+      file: resource-devops.ci/tasks/elasticmonitor.yml
+      input_mapping: {CODE: STAGE}
+      params:
+        ENV: training
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((TRAIN_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((TRAIN_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ES_DOMAIN_URL: ((TRAIN_ES_DOMAIN_URL))
+
+- name: Deploy Elastic search monitor to PREProd
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: resource-elastic-monitor
+      - get: MASTER
+        trigger: true
+
+    - task: deploy-es-monitor-to-preprod
+      privileged: true
+      image: resource-elastic-monitor
+      file: resource-devops.ci/tasks/elasticmonitor.yml
+      input_mapping: {CODE: MASTER}
+      params:
+        ENV: preprod
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((PREP_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((PREP_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ES_DOMAIN_URL: ((PREP_ES_DOMAIN_URL))
+
+- name: Deploy Elastic search monitor to Production
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: resource-elastic-monitor
+      - get: MASTER
+        passed: [Deploy Elastic search monitor to PREProd]
+    - task: deploy-es-monitor-to-production
+      privileged: true
+      image: resource-elastic-monitor
+      file: resource-devops.ci/tasks/elasticmonitor.yml
+      input_mapping: {CODE: MASTER}
+      params:
+        ENV: prod
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((PROD_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((PROD_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ES_DOMAIN_URL: ((PROD_ES_DOMAIN_URL))
+
+- name: Deploy Elastic search monitor to DEV
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: resource-elastic-monitor
+      - get: DEV
+        trigger: true
+
+    - task: terraform-deploy
+      privileged: true
+      image: resource-elastic-monitor
+      file: resource-devops.ci/tasks/elasticmonitor.yml
+      input_mapping: {CODE: DEV}
+      params:
+        ENV: development
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((DEV_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((DEV_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ES_DOMAIN_URL: ((DEV_ES_DOMAIN_URL))

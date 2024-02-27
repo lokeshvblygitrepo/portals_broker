@@ -1,0 +1,95 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+
+- name: resource-devops.ci
+  type: git
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: MASTER
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: Terraform Deploy
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-west-2.amazonaws.com/concourseci-lambda
+    tag: 0.12.4 # This versions has java build with maven 3.5.2 and 0.12.4 of terraform
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+groups:
+- name: production_dr
+  jobs:
+  - Promote ((PROJECT)) and deploy to Production DR
+
+jobs:
+- name: Promote ((PROJECT)) and deploy to Production DR
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: MASTER
+      - get: resource-devops.ci
+      - get: Terraform Deploy
+    - task: terraform-deploy
+      privileged: true
+      image: Terraform Deploy
+      file: resource-devops.ci/tasks/lambda_terraform_deploy.yml
+      input_mapping: {CODE: MASTER}
+      params:
+        TERRAFORM_ENV: proddr
+        ARTIFACTORY_URL: artifactory.mgmt-dr.corvesta.net
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((PROD_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((PROD_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ARTIFACTORYPASSWORD: ((ARTIFACTORYPASSWORD))
+        BUILD_TYPE: ((BUILD_TYPE))

@@ -1,0 +1,1030 @@
+---
+
+  shared:
+    - &failure-alert
+      put: slack-alert
+      params:
+        channel: ((TEAM_CHANNEL))
+        always_notify: true
+        username: "Concource CI"
+        silent: true
+        icon_emoji: ":interrobang:"
+        text: |
+          *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+      get_params: { skip_download: true }
+
+    - &success-alert
+      put: slack-alert
+      params:
+        channel: ((TEAM_CHANNEL))
+        always_notify: true
+        username: "Concource CI"
+        silent: true
+        icon_emoji: ":rocket:"
+        text: |
+          *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+      get_params: { skip_download: true }
+
+    - &restart-failure-alert
+      put: slack-alert
+      params:
+        channel: ((TEAM_CHANNEL))
+        always_notify: true
+        username: "Concource CI"
+        silent: true
+        icon_emoji: ":interrobang:"
+        text: |
+          *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> service restart failed!*
+      get_params: { skip_download: true }
+
+    - &restart-success-alert
+      put: slack-alert
+      params:
+        channel: ((TEAM_CHANNEL))
+        always_notify: true
+        username: "Concource CI"
+        silent: true
+        icon_emoji: ":rocket:"
+        text: |
+          *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> service restart succeeded!*
+      get_params: { skip_download: true }
+
+  resource_types:
+  - name: slack-notification
+    type: docker-image
+    tags: [spring]
+    source:
+      repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+      tag: latest
+      aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+  resources:
+
+  - name: slack-alert
+    type: slack-notification
+    tags: [spring]
+    source:
+      url: ((slack_channel))
+
+  - name: resource-devops.ci
+    type: git
+    check_every: 10m 
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      uri: git@bitbucket.org:corvesta/devops.ci.git
+      branch: ((CI_VERSION))
+      private_key: ((bitbucket-ssh))
+
+  - name: dev
+    type: git
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      uri: git@bitbucket.org:corvesta/((PROJECT)).git
+      branch: develop
+      private_key: ((bitbucket-ssh))
+
+  - name: qa
+    type: git
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      uri: git@bitbucket.org:corvesta/((PROJECT)).git
+      branch: qa
+      private_key: ((bitbucket-ssh))
+
+  - name: stage
+    type: git
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      uri: git@bitbucket.org:corvesta/((PROJECT)).git
+      branch: stage
+      private_key: ((bitbucket-ssh))
+
+  - name: master
+    type: git
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      uri: git@bitbucket.org:corvesta/((PROJECT)).git
+      branch: master
+      private_key: ((bitbucket-ssh))
+
+  - name: resource-run-test
+    type: docker-image
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/python-nodejs
+      tag: latest  
+      aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+  - name: resource-veracode
+    type: docker-image
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/ks-springboot-base-j8
+      tag: 1.0.0
+      aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+  - name: resource-sonar-scanner-image
+    type: docker-image
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/sonar-scanner-cli
+      tag: 4.6
+      aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+
+  - name: resource-build-java-master
+    type: docker-image
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/((BUILD_CONTAINER_MASTER))
+      aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+      tag: ((MAVEN_BUILD_VERSION_MASTER))
+      version: {"tag": "((MAVEN_BUILD_VERSION_MASTER))"}
+  - name: resource-build-java-dev
+    type: docker-image
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/((BUILD_CONTAINER_DEV))
+      aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+      tag: ((MAVEN_BUILD_VERSION_DEV))
+      version: {"tag": "((MAVEN_BUILD_VERSION_DEV))"}
+  - name: resource-build-java-stage
+    type: docker-image
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/((BUILD_CONTAINER_STAGE))
+      aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+      tag: ((MAVEN_BUILD_VERSION_STAGE))
+      version: {"tag": "((MAVEN_BUILD_VERSION_STAGE))"}
+  - name: resource-build-java-qa
+    type: docker-image
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/((BUILD_CONTAINER_QA))
+      aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+      tag: ((MAVEN_BUILD_VERSION_QA))
+      version: {"tag": "((MAVEN_BUILD_VERSION_QA))"}
+  - name: resource-s3-dev
+    type: s3
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+      bucket: cv-mgmt-veracode
+      secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      versioned_file: dev/((PROJECT))/code_build.zip
+
+  - name: resource-s3-dev-dependencies
+    type: s3
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+      bucket: cv-mgmt-veracode
+      secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      versioned_file: dev/((PROJECT))/maven_repository.zip
+
+  - name: resource-s3-dev-results-code
+    type: s3
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+      bucket: cv-mgmt-veracode
+      secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      versioned_file: dev/((PROJECT))/results_code_build.json
+
+  - name: resource-s3-dev-results-maven
+    type: s3
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+      bucket: cv-mgmt-veracode
+      secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      versioned_file: dev/((PROJECT))/results_maven_repository.json
+
+
+  - name: terraform_deploy
+    type: docker-image
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourseci-deploy
+      tag: 0.13.3
+      aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+      # Included example of how to pin to a digest, tagging by version seems to also work.
+      # version: {"digest:sha256": "f981bfaf7ba128c15355a14d08abd2e5995485b08d6443dc29459b11d45fcaab"}
+      version: {"tag": "0.13.3"}
+
+
+  - name: ecr-((CONTAINER_IMAGE))
+    type: docker-image
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/((CONTAINER_IMAGE))
+      aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+  - name: ecr-dr-((CONTAINER_IMAGE))
+    type: docker-image
+    check_timeout: 5m
+    tags: [spring]
+    source:
+      repository: 038131160342.dkr.ecr.us-west-2.amazonaws.com/((CONTAINER_IMAGE))
+      aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+  groups:
+  - name: development
+    jobs:
+    - dev_build_((PROJECT))_container
+    - dev_veracode_((PROJECT))_container
+    - dev_((PROJECT))_sonar_upload
+    - deploy_((TERRAFORM_PROJECT))_container_dev
+    - dev_restart_((PROJECT))_service
+
+  - name: qa
+    jobs:
+    - qa_veracode_((PROJECT))_container
+    - qa_build_((PROJECT))_container
+    - deploy_((TERRAFORM_PROJECT))_container_qa
+    - qa_regression_tests
+    - qa_restart_((PROJECT))_service
+
+  - name: stage
+    jobs:
+    - stage_build_((PROJECT))_container
+    - deploy_((TERRAFORM_PROJECT))_container_stage
+    - deploy_((TERRAFORM_PROJECT))_container_train
+    - stage_restart_((PROJECT))_service
+    - train_restart_((PROJECT))_service
+
+  - name: production
+    jobs:
+    - preprod_build_((PROJECT))_container
+    - deploy_((TERRAFORM_PROJECT))_container_preprod
+    - deploy_((TERRAFORM_PROJECT))_container_production
+    - prep_restart_((PROJECT))_service
+
+  - name: dr
+    jobs:
+     - build_((TERRAFORM_PROJECT))_dr_container
+
+  jobs:
+  - name: dev_build_((PROJECT))_container
+    on_success: *success-alert
+    on_failure: *failure-alert
+    public: true
+    plan:
+     - in_parallel:
+       - get: resource-devops.ci
+         trigger: true
+         tags: [spring]
+       - get: resource-build-java-dev
+         tags: [spring]
+       - get: resource-veracode
+         tags: [spring]
+       - get: dev
+         trigger: true
+         tags: [spring]
+     - task: build-java-spring-artifact
+       privileged: true
+       tags: [spring]
+       image: resource-build-java-dev
+       file: resource-devops.ci/tasks/task_build_test_store.yml
+       input_mapping: {CODE: dev}
+       params:
+        ARTIFACTORYPASSWORD: ((ARTIFACTORYPASSWORD))
+        REPOSITORY_NAME: ((CONTAINER_IMAGE))
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        TYPE: ((BUILD_TYPE))
+        LOGLEVEL: ((LOGLEVEL))
+        SKIP_TEST: ((SKIP_TEST))
+        CONTAINER_TAGS: ((CONTAINER_TAGS))
+        MAVEN_OPTS: -Xss2m
+        PR: ((PR))
+       on_success:
+         in_parallel:
+           - put: ecr-((CONTAINER_IMAGE))
+             tags: [spring]
+             params:
+               build: code_build
+               input: code_build
+               tag: code_build/commit.txt
+               additional_tags: code_build/additonal_tags.txt
+             get_params: { skip_download: true }
+           - put: resource-s3-dev
+             params:
+              file: code_build/target/code_build.zip
+           - put: resource-s3-dev-dependencies
+             params:
+              file: dependencies/maven_dependencies.zip
+    #  - try:
+    #     task: veracode-upload
+    #     privileged: true
+    #     tags: [spring]
+    #     image: resource-veracode
+    #     file: resource-devops.ci/tasks/task_upload_verracode.yml
+    #     input_mapping: {code_build: code_build, resource-devops.ci: resource-devops.ci}
+    #     params:
+    #        VERRACODE_APP: ((PROJECT))
+    #        VERRACODE_PASSWORD: ((VERRACODE_PASSWORD))
+    #        VERACODE_API_KEY_ID: ((VERACODE_API_KEY_ID))
+    #        VERACODE_API_KEY_SECRET: ((VERACODE_API_KEY_SECRET))
+
+  - name: dev_((PROJECT))_sonar_upload
+    public: true
+    plan:
+      - in_parallel:
+        - get: resource-s3-dev
+          trigger: true
+          passed: [dev_build_((PROJECT))_container]
+          params:
+            unpack: true
+        - get: resource-s3-dev-dependencies
+          trigger: true
+          passed: [dev_build_((PROJECT))_container]
+          params:
+            unpack: true
+        - get: resource-sonar-scanner-image
+          tags: [spring]
+        - get: dev
+          trigger: true
+          passed: [dev_build_((PROJECT))_container]
+          tags: [spring]
+        - get: resource-devops.ci
+          tags: [spring]
+      - task: sonar-upload
+        privileged: true
+        tags: [spring]
+        image: resource-sonar-scanner-image
+        input_mapping: {build_artifacts: resource-s3-dev, git_repo: dev, dependencies: resource-s3-dev-dependencies}
+        config:
+          platform: linux
+          inputs:
+            - name: git_repo
+            - name: build_artifacts
+            - name: dependencies
+            - name: resource-devops.ci
+          run:
+            path: sh
+            args:
+              - -exc
+              - |
+                chmod +x resource-devops.ci/build/sonar_upload.sh
+                ./resource-devops.ci/build/sonar_upload.sh
+        params:
+          SONAR_URL: http://devops-sonarqube.tools.mgmt.corvesta.net/
+          SONAR_LOGIN: ((SONARQUBE_SECRET))
+          REPO_PATH: git_repo
+          SONAR_JAVA_LIBRARY_PATH: ../dependencies
+          SONAR_JAVA_BINARY_PATH: ../build_artifacts
+
+  - name: dev_veracode_((PROJECT))_container
+    public: true
+    plan:
+    - in_parallel:
+      - get: resource-s3-dev
+        trigger: true
+        passed: [dev_build_((PROJECT))_container]
+        tags: [spring]
+      - get: resource-veracode
+        tags: [spring]
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: resource-s3-dev-dependencies
+        tags: [spring]
+    - task: veracode-upload
+      privileged: true
+      tags: [spring]
+      image: resource-veracode
+      file: resource-devops.ci/tasks/task_upload_verracode.yml
+      params:
+         VERACODE_API_KEY_ID: ((VERACODE_API_KEY_ID))
+         VERACODE_API_KEY_SECRET: ((VERACODE_API_KEY_SECRET))
+      on_success:
+         in_parallel:
+           - put: resource-s3-dev-results-code
+             params:
+              file: results/scan_results_code_build.json
+           - put: resource-s3-dev-results-maven
+             params:
+              file: results/scan_results_maven_repository.json
+
+
+  - name: deploy_((TERRAFORM_PROJECT))_container_dev
+    on_success: *success-alert
+    on_failure: *failure-alert
+    public: true
+    plan:
+     - in_parallel:
+       - get: resource-devops.ci
+         tags: [spring]
+       - get: terraform_deploy
+         tags: [spring]
+       - get: dev
+         tags: [spring]
+         trigger: true
+         passed: [dev_build_((PROJECT))_container]
+     - task: terraform-deploy
+       privileged: true
+       tags: [spring]
+       image: terraform_deploy
+       file: resource-devops.ci/tasks/((DEPLOY_DEV)).yml
+       input_mapping: {CODE: dev}
+       params:
+        TERRAFORM_ENV: development
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: DEPRECATED
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((DEV_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((DEV_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+
+  - name: dev_restart_((PROJECT))_service
+    on_success: *restart-success-alert
+    on_failure: *restart-failure-alert
+    public: true
+    plan:
+      - in_parallel:
+        - get: resource-run-test
+          tags: [spring]
+        - get: resource-devops.ci
+      - task: service_restart
+        tags: [spring]
+        image: resource-run-test
+        params:
+          AWS_ACCESS_KEY_ID: ((DEV_AWS_ACCESS_KEY_ID))
+          AWS_SECRET_ACCESS_KEY: ((DEV_AWS_SECRET_ACCESS_KEY))
+          GIT_USERNAME: ((bitbucket-username))
+          GIT_PASSWORD: ((bitbucket-apppassword))
+        config:
+          platform: linux
+          inputs:
+            - name: resource-devops.ci
+          run:
+            path: sh 
+            args:
+              - -exc
+              - |
+                pip install boto3
+                python ./resource-devops.ci/restart/restart-ecs_service.py ((PROJECT)) develop
+
+  #QA
+  - name: qa_veracode_((PROJECT))_container
+    public: true
+    plan:
+    - in_parallel:
+      - get: qa
+        trigger: true
+        tags: [spring]
+      - get: resource-veracode
+        tags: [spring]
+      - get: resource-devops.ci
+        tags: [spring]
+    - task: veracode-upload
+      privileged: true
+      tags: [spring]
+      image: resource-veracode
+      file: resource-devops.ci/tasks/python_script.yml
+      input_mapping: {CODE: qa}
+      params:
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        PROJECT: ((PROJECT))
+        
+
+  - name: qa_build_((PROJECT))_container
+    on_success: *success-alert
+    on_failure: *failure-alert
+    public: true
+    plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: resource-build-java-qa
+        tags: [spring]
+      - get: qa
+        trigger: true
+        tags: [spring]
+    - task: build-java-spring-artifact
+      privileged: true
+      tags: [spring]
+      image: resource-build-java-qa
+      file: resource-devops.ci/tasks/task_build_test_store.yml
+      input_mapping: {CODE: qa}
+      params:
+        ARTIFACTORYPASSWORD: ((ARTIFACTORYPASSWORD))
+        REPOSITORY_NAME: ((CONTAINER_IMAGE))
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        TYPE: ((BUILD_TYPE))
+        LOGLEVEL: ((LOGLEVEL))
+        SKIP_TEST: ((SKIP_TEST))
+        CONTAINER_TAGS: ((CONTAINER_TAGS))
+        MAVEN_OPTS: -Xss2m
+        PR: ((PR))
+      on_success:
+        do:
+          - put: ecr-((CONTAINER_IMAGE))
+            tags: [spring]
+            params:
+              build: code_build
+              input: code_build
+              tag: code_build/commit.txt
+              additional_tags: code_build/additonal_tags.txt
+            get_params: { skip_download: true }
+
+  - name: deploy_((TERRAFORM_PROJECT))_container_qa
+    on_success: *success-alert
+    on_failure: *failure-alert
+    public: true
+    plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: terraform_deploy
+        tags: [spring]
+      - get: qa
+        tags: [spring]
+        passed: [qa_build_((PROJECT))_container]
+        trigger: true
+    - task: terraform-deploy
+      privileged: true
+      tags: [spring]
+      image: terraform_deploy
+      file: resource-devops.ci/tasks/((DEPLOY_QA)).yml
+      input_mapping: {CODE: qa}
+      params:
+        TERRAFORM_ENV: qa
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: DEPRECATED
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((QA_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((QA_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+
+  - name: qa_regression_tests
+    on_success: *success-alert
+    on_failure: *failure-alert
+    public: true
+    plan:
+    - in_parallel:
+      - get: resource-run-test
+        tags: [spring]
+      - get: resource-devops.ci
+      - get: qa
+        trigger: true
+        passed: [deploy_((TERRAFORM_PROJECT))_container_qa]
+        tags: [spring]
+    - task: run-pytest
+      privileged: true
+      tags: [spring]
+      image: resource-run-test
+      file: resource-devops.ci/tasks/run_pytest.yml
+      input_mapping: {source_code: qa}
+      params:
+        PROJECT_NAME: ((PROJECT))
+        CBT_USERNAME: ((CBT_USERNAME))
+        TEST_TYPE: WEB_SERVICE
+        CBT_AUTHKEY: ((CBT_AUTHKEY))
+        PG_SERVER: ((PG_SERVER))
+        ARTIFACT_DBNAME: ((ARTIFACT_DBNAME))
+        PG_USERNAME: ((PG_USERNAME))
+        PG_PWD: ((PG_PWD))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        QA_COMPLETE: ((QA_COMPLETE))
+        QA_DB_SERVER: ((QA_DB_SERVER))
+        KS_DB_USERNAME: ((KS_DB_USERNAME))
+        KS_DB_PWD: ((KS_DB_PWD))
+        VAULT_TOKEN: ((QA_VAULT_TOKEN))
+        ENV: qa
+
+  - name: qa_restart_((PROJECT))_service
+    on_success: *restart-success-alert
+    on_failure: *restart-failure-alert
+    public: true
+    plan:
+      - in_parallel:
+        - get: resource-run-test
+          tags: [spring]
+        - get: resource-devops.ci
+      - task: service_restart
+        tags: [spring]
+        image: resource-run-test
+        params:
+          AWS_ACCESS_KEY_ID: ((QA_AWS_ACCESS_KEY_ID))
+          AWS_SECRET_ACCESS_KEY: ((QA_AWS_SECRET_ACCESS_KEY))
+          GIT_USERNAME: ((bitbucket-username))
+          GIT_PASSWORD: ((bitbucket-apppassword))
+        config:
+          platform: linux
+          inputs:
+            - name: resource-devops.ci
+          run:
+            path: sh 
+            args:
+              - -exc
+              - |
+                pip install boto3
+                python ./resource-devops.ci/restart/restart-ecs_service.py ((PROJECT)) qa
+
+  #STAGE
+  - name: stage_build_((PROJECT))_container
+    on_success: *success-alert
+    on_failure: *failure-alert
+    public: true
+    plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: resource-build-java-stage
+        tags: [spring]
+      - get: stage
+        trigger: true
+        tags: [spring]
+    - task: build-java-spring-artifact
+      privileged: true
+      tags: [spring]
+      image: resource-build-java-stage
+      file: resource-devops.ci/tasks/task_build_test_store.yml
+      input_mapping: {CODE: stage}
+      params:
+        ARTIFACTORYPASSWORD: ((ARTIFACTORYPASSWORD))
+        REPOSITORY_NAME: ((CONTAINER_IMAGE))
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        TYPE: ((BUILD_TYPE))
+        LOGLEVEL: ((LOGLEVEL))
+        SKIP_TEST: ((SKIP_TEST))
+        CONTAINER_TAGS: ((CONTAINER_TAGS))
+        MAVEN_OPTS: -Xss2m
+        PR: ((PR))
+      on_success:
+        do:
+          - put: ecr-((CONTAINER_IMAGE))
+            tags: [spring]
+            params:
+              build: code_build
+              input: code_build
+              tag: code_build/commit.txt
+              additional_tags: code_build/additonal_tags.txt
+            get_params: { skip_download: true }
+
+  - name: deploy_((TERRAFORM_PROJECT))_container_stage
+    on_success: *success-alert
+    on_failure: *failure-alert
+    public: true
+    plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: terraform_deploy
+        tags: [spring]
+      - get: stage
+        tags: [spring]
+        passed: [stage_build_((PROJECT))_container]
+        trigger: true
+    - task: terraform-deploy
+      privileged: true
+      tags: [spring]
+      image: terraform_deploy
+      file: resource-devops.ci/tasks/((DEPLOY_STAGE)).yml
+      input_mapping: {CODE: stage}
+      params:
+        TERRAFORM_ENV: staging
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: DEPRECATED
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((STAGE_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((STAGE_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+
+  - name: stage_restart_((PROJECT))_service
+    on_success: *restart-success-alert
+    on_failure: *restart-failure-alert
+    public: true
+    plan:
+      - in_parallel:
+        - get: resource-run-test
+          tags: [spring]
+        - get: resource-devops.ci
+      - task: service_restart
+        tags: [spring]
+        image: resource-run-test
+        params:
+          AWS_ACCESS_KEY_ID: ((STAGE_AWS_ACCESS_KEY_ID))
+          AWS_SECRET_ACCESS_KEY: ((STAGE_AWS_SECRET_ACCESS_KEY))
+          GIT_USERNAME: ((bitbucket-username))
+          GIT_PASSWORD: ((bitbucket-apppassword))
+        config:
+          platform: linux
+          inputs:
+            - name: resource-devops.ci
+          run:
+            path: sh 
+            args:
+              - -exc
+              - |
+                pip install boto3
+                python ./resource-devops.ci/restart/restart-ecs_service.py ((PROJECT)) stage
+
+  #TRAIN
+  - name: deploy_((TERRAFORM_PROJECT))_container_train
+    on_success: *success-alert
+    on_failure: *failure-alert
+    public: true
+    plan:
+      - in_parallel:
+        - get: resource-devops.ci
+          tags: [spring]
+        - get: terraform_deploy
+          tags: [spring]
+        - get: stage
+          trigger: true
+          passed: [deploy_((TERRAFORM_PROJECT))_container_stage]
+          tags: [spring]
+      - task: deploy-container-to-train
+        privileged: true
+        tags: [spring]
+        image: terraform_deploy
+        file: resource-devops.ci/tasks/((DEPLOY_TRAIN)).yml
+        input_mapping: {CODE: stage}
+        params:
+          TERRAFORM_ENV: training
+          TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+          CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+          TERRAFORM_VERSION: DEPRECATED
+          SERVICE_NAME: ((SERVICE_NAME))
+          MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+          MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+          ENV_AWS_SECRET_ACCESS_KEY: ((TRAIN_AWS_SECRET_ACCESS_KEY))
+          ENV_AWS_ACCESS_KEY_ID: ((TRAIN_AWS_ACCESS_KEY_ID))
+          GIT_USERNAME: ((bitbucket-username))
+          GIT_PASSWORD: ((bitbucket-apppassword))
+          DATADOG_API_KEY: ((DATADOG_API_KEY))
+          DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+          
+  - name: train_restart_((PROJECT))_service
+    on_success: *restart-success-alert
+    on_failure: *restart-failure-alert
+    public: true
+    plan:
+      - in_parallel:
+        - get: resource-run-test
+          tags: [spring]
+        - get: resource-devops.ci
+      - task: service_restart
+        tags: [spring]
+        image: resource-run-test
+        params:
+          AWS_ACCESS_KEY_ID: ((TRAIN_AWS_ACCESS_KEY_ID))
+          AWS_SECRET_ACCESS_KEY: ((TRAIN_AWS_SECRET_ACCESS_KEY))
+          GIT_USERNAME: ((bitbucket-username))
+          GIT_PASSWORD: ((bitbucket-apppassword))
+        config:
+          platform: linux
+          inputs:
+            - name: resource-devops.ci
+          run:
+            path: sh 
+            args:
+              - -exc
+              - |
+                pip install boto3
+                python ./resource-devops.ci/restart/restart-ecs_service.py ((PROJECT)) stage
+
+  #PREP
+  - name: preprod_build_((PROJECT))_container
+    on_success: *success-alert
+    on_failure: *failure-alert
+    public: true
+    plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: resource-build-java-master
+        tags: [spring]
+      - get: master
+        trigger: true
+        tags: [spring]
+    - task: build-java-spring-artifact
+      privileged: true
+      tags: [spring]
+      image: resource-build-java-master
+      file: resource-devops.ci/tasks/task_build_test_store.yml
+      input_mapping: {CODE: master}
+      params:
+        ARTIFACTORYPASSWORD: ((ARTIFACTORYPASSWORD))
+        REPOSITORY_NAME: ((CONTAINER_IMAGE))
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        TYPE: ((BUILD_TYPE))
+        LOGLEVEL: ((LOGLEVEL))
+        SKIP_TEST: ((SKIP_TEST))
+        CONTAINER_TAGS: ((CONTAINER_TAGS))
+        MAVEN_OPTS: -Xss2m
+        PR: ((PR))
+      on_success:
+        do:
+          - put: ecr-((CONTAINER_IMAGE))
+            tags: [spring]
+            params:
+              build: code_build
+              input: code_build
+              tag: code_build/commit.txt
+              additional_tags: code_build/additonal_tags.txt
+            get_params: { skip_download: true }
+
+  - name: deploy_((TERRAFORM_PROJECT))_container_preprod
+    on_success: *success-alert
+    on_failure: *failure-alert
+    public: true
+    plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: terraform_deploy
+        tags: [spring]
+      - get: master
+        tags: [spring]
+        passed: [preprod_build_((PROJECT))_container]
+        trigger: true
+    - task: terraform-deploy
+      privileged: true
+      tags: [spring]
+      image: terraform_deploy
+      file: resource-devops.ci/tasks/((DEPLOY_PREP)).yml
+      input_mapping: {CODE: master}
+      params:
+        TERRAFORM_ENV: preprod
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: DEPRECATED
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((PREP_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((PREP_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+
+  - name: prep_restart_((PROJECT))_service
+    on_success: *restart-success-alert
+    on_failure: *restart-failure-alert
+    public: true
+    plan:
+      - in_parallel:
+        - get: resource-run-test
+          tags: [spring]
+        - get: resource-devops.ci
+      - task: service_restart
+        tags: [spring]
+        image: resource-run-test
+        params:
+          AWS_ACCESS_KEY_ID: ((PREP_AWS_ACCESS_KEY_ID))
+          AWS_SECRET_ACCESS_KEY: ((PREP_AWS_SECRET_ACCESS_KEY))
+          GIT_USERNAME: ((bitbucket-username))
+          GIT_PASSWORD: ((bitbucket-apppassword))
+        config:
+          platform: linux
+          inputs:
+            - name: resource-devops.ci
+          run:
+            path: sh 
+            args:
+              - -exc
+              - |
+                pip install boto3
+                python ./resource-devops.ci/restart/restart-ecs_service.py ((PROJECT)) master
+
+  #PROD
+  - name: deploy_((TERRAFORM_PROJECT))_container_production
+    on_success: *success-alert
+    on_failure: *failure-alert
+    public: true
+    plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: terraform_deploy
+        tags: [spring]
+      - get: master
+        tags: [spring]
+        passed: [deploy_((TERRAFORM_PROJECT))_container_preprod]
+    - task: terraform-deploy
+      privileged: true
+      tags: [spring]
+      image: terraform_deploy
+      file: resource-devops.ci/tasks/((DEPLOY_PROD)).yml
+      input_mapping: {CODE: master}
+      params:
+        TERRAFORM_ENV: prod
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: DEPRECATED
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((PROD_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((PROD_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+
+  #DR build
+  - name: build_((TERRAFORM_PROJECT))_dr_container
+    on_success: *success-alert
+    on_failure: *failure-alert
+    public: true
+    plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: resource-build-java-master
+        tags: [spring]
+      - get: master
+        passed: [deploy_((TERRAFORM_PROJECT))_container_production]
+        trigger: true
+        tags: [spring]
+    - task: build-java-spring-artifact
+      privileged: true
+      tags: [spring]
+      image: resource-build-java-master
+      file: resource-devops.ci/tasks/task_build_test_store.yml
+      input_mapping: {CODE: master}
+      params:
+        ARTIFACTORYPASSWORD: ((ARTIFACTORYPASSWORD))
+        REPOSITORY_NAME: ((CONTAINER_IMAGE))
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        TYPE: ((BUILD_TYPE))
+        LOGLEVEL: ((LOGLEVEL))
+        SKIP_TEST: ((SKIP_TEST))
+        CONTAINER_TAGS: ((CONTAINER_TAGS))
+        MAVEN_OPTS: -Xss2m
+        PR: ((PR))
+      on_success:
+        do:
+          - put: ecr-dr-((CONTAINER_IMAGE))
+            tags: [spring]
+            params:
+              build: code_build
+              input: code_build
+              tag: code_build/commit.txt
+              additional_tags: code_build/additonal_tags.txt
+            get_params: { skip_download: true }
+

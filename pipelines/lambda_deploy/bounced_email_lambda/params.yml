@@ -1,0 +1,7 @@
+PROJECT: bounced.email.lambda
+CI_VERSION: 2.0.181
+TERRAFORM_PROJECT: bounced-email-lambda
+SLACK_CHANNEL: https://hooks.slack.com/services/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
+TEAM_CHANNEL: devops-cicd
+BUILD_TYPE: JAVA
+PIP_PATH: ''

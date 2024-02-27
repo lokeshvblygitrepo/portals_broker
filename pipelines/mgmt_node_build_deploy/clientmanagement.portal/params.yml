@@ -1,0 +1,10 @@
+TEAM_CHANNEL: core-frameworks_team
+CI_VERSION : 2.0.104
+PROJECT: clientmanagement.portal
+TERRAFORM_PROJECT: client-management-portal
+CONTAINER_IMAGE: client-management-portal
+SERVICE_NAME: mgmt_node_service
+SKIP_TEST: true
+BUILD_TYPE: NODE
+LOGLEVEL: ERROR
+VERRACODE_APP: clientmanagement.portal

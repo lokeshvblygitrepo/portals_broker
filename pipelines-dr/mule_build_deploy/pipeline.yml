@@ -1,0 +1,122 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+# - name: git-bitbucket-pr
+#   type: docker-image
+#   source:
+#     repository: zarplata/concourse-git-bitbucket-pr-resource
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  tags: [mule]
+  source:
+    url: ((slack_channel))
+
+# - name: pullrequest
+#   type: git-bitbucket-pr
+#   source:
+#     base_url: https://bitbucket.org
+#     username: ((bitbucket-username))
+#     password: ((bitbucket-apppassword))
+#     project: corvesta
+#     repository: ((PROJECT))
+#     bitbucket_type: cloud
+#     git:
+#       uri: https://bitbucket.org/corvesta/((PROJECT))
+#       username: ((bitbucket-username))
+#       password: ((bitbucket-apppassword))
+#     dir: pullrequest
+
+
+- name: resource-devops.ci
+  type: git
+  tags: [mule]
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: resource-anypoint-cli
+  type: docker-image
+  tags: [mule]
+  source:
+    repository: 038131160342.dkr.ecr.us-west-2.amazonaws.com/mule-cli
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+    tag: 0.0.6
+
+
+- name: MASTER
+  type: git
+  tags: [mule]
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+groups:
+
+- name: production
+  jobs:
+  - Deploy mule flow to Production DR
+
+jobs:
+- name: Deploy mule flow to Production DR
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: MASTER
+      - get: resource-devops.ci
+        tags: [mule]
+      - get: resource-anypoint-cli
+        tags: [mule]
+    - task: anypoint-cli-deploy-prod
+      privileged: true
+      tags: [mule]
+      image: resource-anypoint-cli
+      file: resource-devops.ci/tasks/task_deploy_mule.yml
+      input_mapping: {source_code : MASTER}
+      params:
+        ENV: ProductionDR
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ANYPOINT_USERNAME: ((ANYPOINT_USERNAME))
+        ANYPOINT_PASSWORD: ((ANYPOINT_PASSWORD))
+        DEPLOY_TYPE: svrgroup
+        PROJECT: ((PROJECT))

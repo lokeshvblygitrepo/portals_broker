@@ -1,0 +1,103 @@
+#bosh-aws-keys.yml Should contain AWS access keys
+#### build director
+bosh create-env bosh.yml \
+--state=state.json \
+--vars-store=creds.yml \
+--vars-file=bosh-aws-keys.yml \
+-o cpi.yml \
+-v director_name=mgmt \
+-v internal_cidr=10.90.36.0/24 \
+-v internal_gw=10.90.36.1 \
+-v internal_ip=10.90.36.6 \
+-v region=us-east-1 \
+-v az=us-east-1a \
+-v default_key_name=bosh \
+-v default_security_groups=[boshdefault] \
+--var-file private_key=~/ssh/bosh.pem \
+-v subnet_id=subnet-51aaf07e
+
+###build cloud config
+bosh -e mgmt update-cloud-config bin/aws-cloud.yml
+
+####get stemcell for deploy
+bosh -e mgmt-dr upload-stemcell --sha1 b20eba94d74721715dc460170e2fbc62427fb834 \
+  https://bosh.io/d/stemcells/bosh-aws-xen-hvm-ubuntu-xenial-go_agent?v=456.3
+
+  #deploy concourse
+bosh -e mgmt deploy -d concourse concourse.yml \
+-l concourse/versions.yml \
+--vars-store creds.yml \
+-o concourse/operations/basic-auth.yml \
+--var external_url=http://concourseci.mgmt.corvesta.net \
+--var network_name=ops_services \
+--var web_vm_type=concourse_web \
+--var db_vm_type=concourse_db \
+--var db_persistent_disk_type=large \
+--var worker_vm_type=concourse_worker \
+--var deployment_name=concourse \
+--var deployment_name=concourse \
+--var local_user.username=admin1 \
+--skip-drain
+
+
+## delete the concourse setup
+bosh -e mgmt -d concourse delete-deployment
+
+
+# ## rebuild director certs command with CPI
+# bosh create-env bosh.yml \
+# --state=state.json \
+# --vars-store=creds1.yml \
+# --vars-file=bosh-aws-keys.yml \
+# -v director_name=mgmt \
+# -v internal_cidr=10.90.36.0/24 \
+# -v internal_gw=10.90.36.1 \
+# -v internal_ip=10.90.36.6 \
+# -v region=us-east-1 \
+# -v az=us-east-1a \
+# -v default_key_name=bosh \
+# -v default_security_groups=[boshdefault] \
+# --var-file private_key=~/.ssh/bosh.pem \
+# -v subnet_id=subnet-51aaf07e \
+# -o cpi.yml
+#
+# ## remove old ca cert references
+#
+# bosh create-env bosh.yml \
+#  --state state.json \
+#  -o cpi.yml \
+#  -o remove-old-ca.yml \
+#  -o ... additional opsfiles \
+#  --vars-store ./creds.yml \
+#  -v ... additional vars
+# DR Bosh Env
+bosh create-env bosh.yml \
+--state=statesdr.json --vars-store=credsdr.yml \
+--vars-file=bosh-aws-keys.yml \
+-v director_name=mgmt-dr \
+-v internal_cidr=10.92.36.0/24 \
+-v internal_gw=10.92.36.1 \
+-v internal_ip=10.92.36.6 \
+-v region=us-west-2  \
+-v az=us-west-2a \
+-v default_key_name=bosh \
+-v default_security_groups="[boshdefault]" \
+--var-file private_key=~/devops/keys/bosh.pem \
+-v subnet_id=subnet-0cdcd5866e3e3e67e -o cpi.yml
+
+#DR
+
+bosh -e mgmt-dr deploy -d concourse concoursedr.yml \
+-l concourse/versionsdr.yml \
+--vars-store credsdr.yml \
+-o concourse/operations/basic-auth.yml \
+--var external_url=http://concourseci.mgmt-dr.corvesta.net \
+--var network_name=ops_services \
+--var web_vm_type=concourse_web \
+--var db_vm_type=concourse_db \
+--var db_persistent_disk_type=large \
+--var worker_vm_type=concourse_worker \
+--var deployment_name=concourse \
+--var deployment_name=concourse \
+--var local_user.username=admin1 \
+--skip-drain

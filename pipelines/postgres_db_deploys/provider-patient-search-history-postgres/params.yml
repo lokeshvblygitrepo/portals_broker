@@ -1,0 +1,13 @@
+CI_VERSION : 2.0.104
+PROJECT: provider.patient_search_history.db
+BUILD_TYPE: POSTGRES
+LOGLEVEL: ERROR
+TEAM_CHANNEL: data
+LIQUIBASE_PORT: 5432
+LIQUIBASE_DATABASE: provider_patient_search_history
+LIQUIBASE_USERNAME: corvesta
+LIQUIBASE_CHANGELOG: changelog.xml
+LIQUIBASE_LOGLEVEL: debug
+LIQUIBASE_CLASSPATH: /opt/jdbc/postgres-jdbc.jar
+LIQUIBASE_DRIVER: org.postgresql.Driver
+LIQUIBASE_DEBUG: unset

@@ -1,0 +1,9 @@
+PROJECT: odl-dentemax-lambda
+CI_VERSION : 2.0.161
+TERRAFORM_PROJECT: odl-dentemax-lambda
+TEAM_CHANNEL: devops-cicd
+BUILD_TYPE: PYTHON
+DEPLOY: lambda_terraform_deploy_2021
+CI_IMAGE: concourseci-alpine-p3-tf
+CI_IMAGE_TAG: 1.0.0
+PIP_PATH: ""

@@ -1,0 +1,5 @@
+CI_VERSION : 2.0.132
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.tenant_s3_triggers
+TERRAFORM_PROJECT: tenant-s3-lambda-triggers
+DEPLOY: terraform_pipeline

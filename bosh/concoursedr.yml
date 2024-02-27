@@ -1,0 +1,273 @@
+---
+name: ((deployment_name))
+
+releases:
+- name: concourse
+  version: ((concourse_version))
+  sha1: ((concourse_sha1))
+  url: https://bosh.io/d/github.com/concourse/concourse-bosh-release?v=((concourse_version))
+- name: postgres
+  version: ((postgres_version))
+  sha1: ((postgres_sha1))
+  url: https://bosh.io/d/github.com/cloudfoundry/postgres-release?v=((postgres_version))
+- name: bpm
+  version: ((bpm_version))
+  sha1: ((bpm_sha1))
+  url: https://bosh.io/d/github.com/cloudfoundry-incubator/bpm-release?v=((bpm_version))
+- name: datadog-agent
+  version: ((datadog_version))
+  url: https://bosh.io/d/github.com/DataDog/datadog-agent-boshrelease?v=((datadog_version))
+  sha1: ((datadog_sha1))
+- name: "nginx"
+  version: ((nginx_version))
+  url: "https://bosh.io/d/github.com/cloudfoundry-community/nginx-release?v=((nginx_version))"
+  sha1: ((nginx_sha1))  
+- name: ulimit
+  version: latest
+
+instance_groups:
+- name: web
+  instances: 1
+  azs: [z1]
+  networks:
+    - name: ((network_name))
+      static_ips:
+        - 10.92.36.18
+  stemcell: xenial
+  vm_type: ((web_vm_type))
+  jobs:
+  - name: nginx
+    release: nginx
+    properties:
+      nginx_conf: |
+        user nobody vcap;
+        worker_processes  1;
+        error_log /var/vcap/sys/log/nginx/error.log   info;
+        events {
+          worker_connections  1024;
+        }
+        http {
+          server_tokens off;
+          server {
+            listen 8081;
+            set $upstream 127.0.0.1;
+            gzip                on;
+            gzip_min_length     1000;
+            gzip_buffers        4 8k;
+            gzip_http_version   1.0;
+            gzip_disable        "msie6";
+            gzip_types          text/plain text/css application/json;
+            gzip_vary           on;
+            gzip_proxied        any;
+
+
+            location / {
+              proxy_pass_request_headers on;
+              proxy_pass http://$upstream:8080;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header Host $host;
+              proxy_http_version 1.1;
+              proxy_set_header Connection "";
+            }
+            location ~ /hijack$ {
+              keepalive_timeout 0;
+              proxy_pass_request_headers on;
+              proxy_pass http://$upstream:8080;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header Host $host;
+              # required for websocket support
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection "upgrade";
+              proxy_http_version 1.1;
+              proxy_set_header Connection "";
+              proxy_buffering off;
+              client_max_body_size 0;
+              proxy_read_timeout 36000s;
+              proxy_redirect off;
+            }            
+          }
+        }
+  
+  - release: bpm
+    name: bpm
+  - release: concourse
+    name: web
+    properties:
+
+      log_level: debug
+
+      token_signing_key: ((token_signing_key))
+      external_url: ((external_url))
+
+      secrets:
+        cache:
+          enabled: true
+          
+      vault:
+        auth:
+          backend: token
+          client_token: ((vault_token))
+        url: https://vault.mgmt-dr.corvesta.net
+
+      postgresql:
+        database: &db_name atc
+        role: &db_role
+          name: concourse
+          password: ((postgres_password))
+
+      worker_gateway:
+          host_key: ((tsa_host_key))
+          authorized_keys: |
+            ((worker_key.public_key))
+
+      datadog:
+        agent_host: 127.0.0.1
+        agent_port: 8125
+        prefix: mgmt-dr-concourse
+      build_log_retention:
+        default_builds: 30
+        maximum: 1000        
+
+  - name: dd-agent
+    release: datadog-agent
+    properties:
+      dd:
+        api_key: ((dd_api_key))
+        use_dogstatsd: true
+        dogstatsd_port: 8125
+
+  - name: ulimit
+    release: ulimit
+    properties:
+      nofile:
+        soft: 32768
+        hard: 32768
+
+- name: db
+  instances: 1
+  azs: [z1]
+  networks: [{name: ((network_name))}]
+  stemcell: xenial
+  vm_type: ((db_vm_type))
+  persistent_disk_type: ((db_persistent_disk_type))
+  jobs:
+  - release: postgres
+    name: postgres
+    properties:
+      databases:
+        port: 5432
+        databases:
+        - name: *db_name
+        roles:
+        - *db_role
+  - name: dd-agent
+    release: datadog-agent
+    properties:
+      dd:
+        api_key: ((dd_api_key))
+        use_dogstatsd: true
+        dogstatsd_port: 8125
+
+- name: talend
+  instances: 1
+  azs: [z1]
+  networks: [{name: ((network_name))}]
+  stemcell: xenial
+  vm_type: ((worker_vm_type))
+  jobs:
+  - release: concourse
+    name: worker
+    consumes: {baggageclaim: {from: talend-baggageclaim}}
+    properties:
+      drain_timeout: 10m
+      tsa: {worker_key: ((worker_key))}
+      tags: [talend]
+      worker_gateway: {worker_key: ((worker_key))}
+
+- name: mule
+  instances: 1
+  azs: [z1]
+  networks: [{name: ((network_name))}]
+  stemcell: xenial
+  vm_type: ((worker_vm_type))
+  jobs:
+  - release: concourse
+    name: worker
+    consumes: {baggageclaim: {from: mule-baggageclaim}}
+    properties:
+      drain_timeout: 10m
+      tsa: {worker_key: ((worker_key))}
+      tags: [mule]
+      worker_gateway: {worker_key: ((worker_key))}
+
+- name: spring
+  instances: 1
+  azs: [z1]
+  networks: [{name: ((network_name))}]
+  stemcell: xenial
+  vm_type: ((worker_vm_type))
+  jobs:
+  - release: concourse
+    name: worker
+    consumes: {baggageclaim: {from: spring-baggageclaim}}
+    properties:
+      drain_timeout: 10m
+      tsa: {worker_key: ((worker_key))}
+      tags: [spring]
+      worker_gateway: {worker_key: ((worker_key))}
+
+- name: node
+  instances: 1
+  azs: [z1]
+  networks: [{name: ((network_name))}]
+  stemcell: xenial
+  vm_type: ((worker_vm_type))
+  jobs:
+  - release: concourse
+    name: worker
+    consumes: {baggageclaim: {from: node-baggageclaim}}
+    properties:
+      drain_timeout: 10m
+      tsa: {worker_key: ((worker_key))}
+      tags: [node]
+      worker_gateway: {worker_key: ((worker_key))}
+
+- name: worker
+  instances: 1
+  azs: [z1]
+  networks: [{name: ((network_name))}]
+  stemcell: xenial
+  vm_type: ((worker_vm_type))
+  jobs:
+  - release: concourse
+    name: worker
+    consumes: {baggageclaim: {from: worker-baggageclaim}}
+    properties:
+      drain_timeout: 10m
+      tsa: {worker_key: ((worker_key))}
+      worker_gateway: {worker_key: ((worker_key))}
+
+variables:
+- name: postgres_password
+  type: password
+- name: token_signing_key
+  type: rsa
+- name: tsa_host_key
+  type: ssh
+- name: worker_key
+  type: ssh
+
+stemcells:
+- alias: xenial
+  os: ubuntu-xenial
+  version: "621.109"
+
+update:
+  canaries: 1
+  max_in_flight: 10
+  serial: false
+  canary_watch_time: 1000-60000
+  update_watch_time: 1000-60000
+

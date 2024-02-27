@@ -1,0 +1,94 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concourseci.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concourseci.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: git-bitbucket-pr
+  type: docker-image
+  source:
+    repository: zarplata/concourse-git-bitbucket-pr-resource
+
+resources:
+
+- name: terraform-repo
+  type: git
+  check_timeout: 5m
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+
+
+- name: Terraform Deploy
+  type: docker-image
+  check_timeout: 5m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourseci-deploy
+    tag: 0.13.3
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+
+jobs:
+- name: Plan ((PROJECT))
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: Terraform Deploy
+      - get: terraform-repo
+        trigger: true
+    - task: deploy-((PROJECT))
+      privileged: true
+      image: Terraform Deploy
+      file: resource-devops.ci/tasks/terraform_deploy.yml
+      input_mapping: {CODE: QA}
+      params:
+        TERRAFORM_ENV: qa
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: 0.13.3
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((QA_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((QA_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        VAULT_TOKEN: ((VAULT_TOKEN))

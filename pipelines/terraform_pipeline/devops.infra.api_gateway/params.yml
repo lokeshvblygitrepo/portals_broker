@@ -1,0 +1,5 @@
+CI_VERSION : 2.0.128
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.infra.api_gateway 
+TERRAFORM_PROJECT: api_gateway
+DEPLOY: terraform_pipeline

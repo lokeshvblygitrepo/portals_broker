@@ -1,0 +1,18 @@
+CI_VERSION : 2.0.188
+PROJECT: ksdw.sf.db
+BUILD_TYPE: SNOWFLAKE
+LOGLEVEL: ERROR
+TEAM_CHANNEL: data
+LIQUIBASE_PORT: 443
+LIQUIBASE_DATABASE: KSDW
+LIQUIBASE_ROLE: SYSADMIN
+LIQUIBASE_CHANGELOG: changelog.xml
+LIQUIBASE_LOGLEVEL: debug
+LIQUIBASE_DEBUG: unset
+LIQUIBASE_SCHEMA: RAW
+LIQUIBASE_dev: ddco, ddva
+LIQUIBASE_qa: ddco, ddva
+LIQUIBASE_stage: ddco, ddva, taic, ddks
+LIQUIBASE_train: ddva
+LIQUIBASE_prep: ddco, ddva, taic, ddks
+LIQUIBASE_prod: ddco, ddva, taic, ddks

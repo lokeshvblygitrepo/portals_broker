@@ -1,0 +1,132 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      username: Concource CI
+      always_notify: true
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The CI DR  <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+- name: git-bitbucket-pr
+  type: docker-image
+  source:
+    repository: zarplata/concourse-git-bitbucket-pr-resource
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+
+# - name: pullrequest
+#   type: git-bitbucket-pr
+#   source:
+#     base_url: https://bitbucket.org
+#     username: ((bitbucket-username))
+#     password: ((bitbucket-apppassword))
+#     project: corvesta
+#     repository: ((PROJECT))
+#     bitbucket_type: cloud
+#     git:
+#       uri: https://bitbucket.org/corvesta/((PROJECT))
+#       username: ((bitbucket-username))
+#       password: ((bitbucket-apppassword))
+#     dir: pullrequest
+    
+- name: resource-devops.ci
+  type: git
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: MASTER
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: resource-build-java
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-west-2.amazonaws.com/concourseci-build-java
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+    tag: ((MAVEN_BUILD_VERSION))
+
+jobs:
+- name: build MASTER Lib
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: resource-build-java
+      - get: MASTER
+        trigger: true
+    - task: build-java-spring-lib
+      privileged: true
+      image: resource-build-java
+      params:
+        ARTIFACTORYPASSWORD: ((ARTIFACTORYPASSWORD))
+        ARTIFACTORYURL: artifactory.mgmt-dr.corvesta.net
+        LOGLEVEL: ((LOGLEVEL))
+        GITREPONAME: ((PROJECT))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        PR: "false"
+        TYPE: ((BUILD_TYPE))
+      file: resource-devops.ci/tasks/task_build_test_lib.yml
+
+
+# - name: Test Pull request
+#   on_success: *success-alert
+#   on_failure: *failure-alert
+#   public: true
+#   plan:
+#     - in_parallel:
+#       - get: resource-devops.ci
+#       - get: resource-build-java
+#       - get: pullrequest
+#         trigger: true
+#     - task: build-java-spring-artifact-pull-request
+#       privileged: true
+#       image: resource-build-java
+#       params:
+#         ARTIFACTORYPASSWORD: ((ARTIFACTORYPASSWORD))
+#         MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+#         MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+#         GITREPONAME: ((PROJECT))
+#         TYPE: ((BUILD_TYPE))
+#         LOGLEVEL: ((LOGLEVEL))
+#         PR: "true"
+#       file: resource-devops.ci/tasks/task_build_test_lib.yml
+#       input_mapping: {MASTER: pullrequest}

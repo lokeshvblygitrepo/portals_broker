@@ -1,0 +1,18 @@
+TEAM_CHANNEL: ice_ci
+CI_VERSION : 2.0.209
+PROJECT: icegateway.portal
+TERRAFORM_PROJECT: icegateway_portal
+CONTAINER_IMAGE: icegateway-portal
+SERVICE_NAME: node_service
+SKIP_TEST: true
+LOGLEVEL: ERROR
+BUILD_TYPE: NODE
+VERRACODE_APP: icegateway.portal
+VALIDATE_NGINX_CONFIGS: false
+DEPLOY: terraform_deploy_node
+DEPLOY_DEV: terraform_deploy_node_alb
+DEPLOY_QA: terraform_deploy_node_alb
+DEPLOY_STAGE: terraform_deploy_node
+DEPLOY_TRAIN: terraform_deploy_node
+DEPLOY_PREP: terraform_deploy_node
+DEPLOY_PROD: terraform_deploy_node

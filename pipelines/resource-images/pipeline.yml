@@ -1,0 +1,26 @@
+---
+jobs:
+- name: build-docker-image
+  public: true
+  serial: true
+  plan:
+  - get: git-concourse-build-docker-image
+    trigger: true
+  - put: docker-image
+    params:
+      build: git-concourse-build-docker-image/pipelines/resource-images/((ecr_repo))
+
+resources:
+- name: git-concourse-build-docker-image
+  type: git
+  source:
+    uri: ((repo))
+    branch: develop
+
+- name: ecr
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/((ecr_repo))
+    tag: latest
+    aws_secret_access_key: ((AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((AWS_ACCESS_KEY_ID))

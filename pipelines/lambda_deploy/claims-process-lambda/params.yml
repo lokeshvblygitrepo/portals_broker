@@ -1,0 +1,6 @@
+PROJECT: lambda-claims-process
+CI_VERSION: 2.0.181
+TERRAFORM_PROJECT: lambda-claims-process
+TEAM_CHANNEL: devops-cicd
+BUILD_TYPE: PYTHON
+PIP_PATH: ''

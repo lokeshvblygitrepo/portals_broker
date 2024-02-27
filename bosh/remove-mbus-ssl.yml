@@ -1,0 +1,3 @@
+---
+- type: remove
+  path: /mbus_bootstrap_ssl?

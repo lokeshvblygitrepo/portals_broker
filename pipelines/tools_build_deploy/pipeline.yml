@@ -1,0 +1,147 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+
+- name: git-commit
+  type: s3
+  source:
+    bucket: cv-service-git-commit
+    private: true
+    region_name: ((REGION))
+    content_type: text/html
+    versioned_file: ((CONTAINER_IMAGE))/commit.txt
+    access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+    secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+
+- name: resource-devops.ci
+  type: git
+  check_every: 10m
+  check_timeout: 5m
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: master
+  type: git
+  check_timeout: 5m
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: Terraform Deploy
+  type: docker-image
+  check_timeout: 5m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourseci-deploy
+    tag: 0.12.4
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: ecr-((CONTAINER_IMAGE))
+  type: docker-image
+  check_timeout: 5m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/((CONTAINER_IMAGE))
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: ecr-dr-((CONTAINER_IMAGE))
+  type: docker-image
+  check_timeout: 5m
+  source:
+    repository: 038131160342.dkr.ecr.us-west-2.amazonaws.com/((CONTAINER_IMAGE))
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+jobs:
+- name: build_container
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - get: master
+      trigger: true
+    - put: ecr-((CONTAINER_IMAGE))
+      params:
+        build: master
+        input: master
+        tag: master/.git/ref  # this needs to be updated with a build scritp to get hash.
+    - put: ecr-dr-((CONTAINER_IMAGE))
+      params:
+        build: master
+        input: master
+        tag: master/.git/ref  # this needs to be updated with a build scritp to get hash.
+      get_params : { skip_download: true }
+      on_success:
+        put: git-commit  # this can't be removed before the build script is created.
+        params:
+          file: master/.git/ref
+
+- name: Deploy to MGMT
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: git-commit
+        trigger: true
+      - get: resource-devops.ci
+      - get: Terraform Deploy
+      - get: master
+      - get: ecr-((CONTAINER_IMAGE))
+    - task: deploy-container-to-mgmt
+      privileged: true
+      image: Terraform Deploy
+      file: resource-devops.ci/tasks/terraform_deploy_mgmt.yml
+      input_mapping: {CODE: master}
+      params:
+        TERRAFORM_ENV: mgmt
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))

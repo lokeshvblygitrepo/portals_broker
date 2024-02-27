@@ -1,0 +1,107 @@
+---
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+  - name: slack-notification
+    type: docker-image
+    source:
+      repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+      tag: latest
+      aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+  
+  - name: git-bitbucket-pr
+    type: docker-image
+    source:
+      repository: zarplata/concourse-git-bitbucket-pr-resource
+
+resources:
+  - name: slack-alert
+    type: slack-notification
+    source:
+      url: ((slack_channel))
+  
+  - name: resource-devops.ci
+    type: git
+    check_timeout: 5m
+    source:
+      uri:  https://bitbucket.org/corvesta/devops.ci.git
+      branch: ((CI_VERSION))
+      username: ((bitbucket-username))
+      password: ((bitbucket-apppassword))
+  
+  - name: project-repo
+    type: git
+    check_timeout: 5m
+    source:
+      uri: https://bitbucket.org/corvesta/((PROJECT)).git
+      branch: feature/sonar_ecs
+      username: ((bitbucket-username))
+      password: ((bitbucket-apppassword))
+  
+  - name: terraform_deploy
+    type: docker-image
+    check_timeout: 5m
+    source:
+      repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourseci-alpine-p3-tf
+      tag: 1.0.0
+      aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+  
+groups:
+  - name: Management 
+    jobs:
+    - deploy_((PROJECT))_job_to_mgmt
+  
+jobs:
+  - name: deploy_((PROJECT))_job_to_mgmt
+    on_success: *success-alert
+    on_failure: *failure-alert
+    public: true
+    plan:
+      - in_parallel:
+        - get: project-repo
+          trigger: true
+        - get: resource-devops.ci
+        - get: terraform_deploy
+      - task: terraform-deploy
+        privileged: true
+        image: terraform_deploy
+        file: resource-devops.ci/tasks/((DEPLOY)).yml
+        input_mapping: {CODE: project-repo}
+        params:
+          TERRAFORM_ENV: mgmt
+          TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+          CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+          containerVersion: ((CONTAINER_VERSION))
+          TERRAFORM_VERSION: DEPRECATED
+          SERVICE_NAME: ((SERVICE_NAME))
+          TERRAFORM_TEAM_TOKEN: ((TERRAFORM_TEAM_TOKEN))
+          MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+          MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+          ENV_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+          ENV_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+          GIT_USERNAME: ((bitbucket-username))
+          GIT_PASSWORD: ((bitbucket-apppassword))
+          ARTIFACTORYPASSWORD: ((ARTIFACTORYPASSWORD))

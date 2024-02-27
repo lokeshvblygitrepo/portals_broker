@@ -1,0 +1,3 @@
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.infra.airflow_python
+CONTAINER_IMAGE: airflow

@@ -1,0 +1,24 @@
+# this file is partially maintained by CI; the concourse and garden-runc
+# versions and sha1s are automatically bumped, while the rest are preserved
+# as-is.
+#
+# this should make getting started easy while being easy enough to maintain
+# manually. feel free to PR sane defaults along with newly supported
+# infrastructures and such!
+---
+concourse_version: '5.4.1'
+concourse_sha1: 'c7051a773cc33435f7d608a020d8e0765c8faf4a'
+postgres_version: '25'
+postgres_sha1: '20929ee4b0c64fd97072a266311a6d00714124a7'
+virtualbox_cpi_version: '0.0.12'
+virtualbox_cpi_sha1: 537c77b087eeda859b1eb89553efa6f808214d50
+virtualbox_stemcell_version: '3468.5'
+virtualbox_stemcell_sha1: 25301a41c15caad859b66efc0fd75bacdfc57dab
+syslog_version: '11.4.0'
+syslog_sha1: 'f00edc8ae2c4abf92bdb8d9037cd8b7aa85e2f89'
+bpm_version: '1.0.4'
+bpm_sha1: '41df19697d6a69d2552bc2c132928157fa91abe0'
+datadog_version: '2.9.6112'
+datadog_sha1: 'a5f1e7a52c0ba3ac8d00afc44bbd740041b73776'
+nginx_version: '1.17.0'
+nginx_sha1: '13cf87b2394c7d3924f9d66836c56302fb46a90d'

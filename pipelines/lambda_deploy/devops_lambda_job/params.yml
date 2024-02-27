@@ -1,0 +1,6 @@
+PROJECT: devops.infra.lambda
+CI_VERSION: 2.0.181
+TERRAFORM_PROJECT: devops_lambda_jobs
+TEAM_CHANNEL: devops-cicd
+BUILD_TYPE: PYTHON
+PIP_PATH: /usr/bin/pip

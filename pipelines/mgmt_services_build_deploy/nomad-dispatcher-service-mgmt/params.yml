@@ -1,0 +1,11 @@
+CI_VERSION : 2.0.104
+TEAM_CHANNEL: core_ci
+PROJECT: nomadJobDispatcher.svc
+TERRAFORM_PROJECT: nomad_dispatcher_service
+CONTAINER_IMAGE: nomad-dispatcher-service
+SERVICE_NAME: mgmt_service
+BUILD_TYPE: JAVA
+MAVEN_BUILD_VERSION: 1.0.1
+SKIP_TEST: false
+LOGLEVEL: ERROR
+PR: false

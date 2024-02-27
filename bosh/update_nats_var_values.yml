@@ -1,0 +1,31 @@
+# update_nats_var_values.yml
+
+---
+- type: replace
+  path: /nats_ca
+  value: ((nats_ca_2))
+
+- type: replace
+  path: /nats_clients_director_tls
+  value: ((nats_clients_director_tls_2))
+
+- type: replace
+  path: /nats_clients_health_monitor_tls
+  value: ((nats_clients_health_monitor_tls_2))
+
+- type: replace
+  path: /nats_server_tls
+  value: ((nats_server_tls_2))
+
+- type: remove
+  path: /nats_ca_2
+
+- type: remove
+  path: /nats_clients_director_tls_2
+
+- type: remove
+  path: /nats_clients_health_monitor_tls_2
+
+- type: remove
+  path: /nats_server_tls_2
+

@@ -1,0 +1,110 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+    get_params: { skip_download: true }
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The CI DR  <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+    get_params: { skip_download: true }
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  tags: [spring]
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+- name: git-bitbucket-pr
+  type: docker-image
+  tags: [spring]
+  source:
+    repository: zarplata/concourse-git-bitbucket-pr-resource
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  tags: [spring]
+  source:
+    url: ((slack_channel))
+
+
+- name: resource-devops.ci
+  type: git
+  tags: [spring]
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: MASTER
+  type: git
+  tags: [spring]
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: Terraform Deploy
+  type: docker-image
+  tags: [spring]
+  source:
+    repository: 038131160342.dkr.ecr.us-west-2.amazonaws.com/concourseci-deploy
+    tag: 0.12.4
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+groups:
+
+- name: production
+  jobs:
+  - Deploy ((TERRAFORM_PROJECT)) Production and Deploy
+
+
+jobs:
+- name: Deploy ((TERRAFORM_PROJECT)) Production and Deploy
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: Terraform Deploy
+        tags: [spring]
+      - get: MASTER
+        trigger: true
+        tags: [spring]
+    - task: terraform-deploy
+      privileged: true
+      tags: [spring]
+      image: Terraform Deploy
+      file: resource-devops.ci/tasks/deploy_alfresco.yml
+      input_mapping: {source_code: MASTER}
+      params:
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        SERVERS: NA
+        SSH_PEM: ((PROD_SSH_PEM))
+

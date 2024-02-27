@@ -1,0 +1,10 @@
+TEAM_CHANNEL: helloworld
+CI_VERSION : 2.0.104
+PROJECT: helloworld.portal
+TERRAFORM_PROJECT: hello_world_portal
+CONTAINER_IMAGE: hello-world-portal
+SERVICE_NAME: mgmt_node_service
+SKIP_TEST: true
+BUILD_TYPE: NODE
+LOGLEVEL: ERROR
+VERRACODE_APP: helloworld-mgmt.portal

@@ -1,0 +1,5 @@
+
+CI_VERSION: 2.0.115
+TEAM_CHANNEL: devops
+PROJECT: devops.infra.tenant_keys
+AWS_REGION: us-east-1

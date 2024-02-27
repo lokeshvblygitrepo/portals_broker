@@ -1,0 +1,90 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: devops
+      username: Concource CI
+      always_notify: true
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: devops
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME>  job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+- name: git-bitbucket-pr
+  type: docker-image
+  source:
+    repository: zarplata/concourse-git-bitbucket-pr-resource
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+
+- name: resource-devops.ci
+  type: git
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: 2.0.40
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: devops.concourseci
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/devops.concourseci.git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: resource-build-fly
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-west-2.amazonaws.com/fly
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+    tag: 5.2
+
+jobs:
+- name: build concourse pipelines
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: resource-build-fly
+      - get: devops.concourseci
+        trigger: true
+    - task: run-fly-commands
+      privileged: true
+      image: resource-build-fly
+      params:
+        LOGLEVEL: DEBUG
+        FLYPASSWORD: ((FLYPASSWORD))
+        PIPELINE_TO_SKIP: onboarding
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV: mgmt-dr
+      file: resource-devops.ci/tasks/build_piplines.yml

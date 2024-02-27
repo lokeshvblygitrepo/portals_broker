@@ -1,0 +1,8 @@
+CI_VERSION : 2.0.104
+TEAM_CHANNEL: devops-cicd
+CONTAINER_IMAGE: qa_webautomation_dashboard
+PROJECT: qa.automation.web_dashboard
+TERRAFORM_PROJECT: qa_webautomation_dashboard
+SERVICE_NAME: django_service
+SKIP_TEST: true
+DEPLOY: terraform_deploy_node_hotfix

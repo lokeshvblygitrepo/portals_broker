@@ -1,0 +1,7 @@
+CI_VERSION : 2.0.103
+TEAM_CHANNEL: devops-cicd
+CONTAINER_IMAGE: qa-dashboard
+PROJECT: devops.django.qa_web_automation
+TERRAFORM_PROJECT: qa_dashboard
+SERVICE_NAME: django_service
+DEPLOY: terraform_deploy_node_hotfix

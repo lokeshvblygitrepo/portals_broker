@@ -1,0 +1,7 @@
+CI_VERSION : 2.0.185
+TEAM_CHANNEL: devops-cicd
+CONTAINER_IMAGE: architecture
+PROJECT: devops.infra.draw.io
+TERRAFORM_PROJECT: architecture
+SERVICE_NAME: tool_service
+

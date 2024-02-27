@@ -1,0 +1,112 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  tags: [node]
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  tags: [node]
+  source:
+    url: ((slack_channel))
+
+
+- name: resource-devops.ci
+  type: git
+  tags: [node]
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+    
+- name: MASTER
+  type: git
+  tags: [node]
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: Terraform Deploy
+  type: docker-image
+  tags: [node]
+  source:
+    repository: 038131160342.dkr.ecr.us-west-2.amazonaws.com/concourseci-deploy
+    tag: 0.12.4
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+groups:
+- name: production
+  jobs:
+  - Deploy ((TERRAFORM_PROJECT)) to PRODUCTION DR
+
+
+jobs:
+- name: Deploy ((TERRAFORM_PROJECT)) to PRODUCTION DR
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: MASTER        
+        tags: [node]
+      - get: resource-devops.ci
+        tags: [node]
+      - get: Terraform Deploy
+        tags: [node]
+    - task: terraform-deploy
+      privileged: true
+      tags: [node]
+      image: Terraform Deploy
+      file: resource-devops.ci/tasks/terraform_deploy_node.yml
+      input_mapping: {CODE: MASTER}
+      params:
+        TERRAFORM_ENV: proddr
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: DEPRECATED
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((PROD_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((PROD_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        VAULT_TOKEN: ((VAULT_TOKEN))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))        
+
+##### NEED TO IMPLEMENT A PR BUILD IN PIPELINE #####

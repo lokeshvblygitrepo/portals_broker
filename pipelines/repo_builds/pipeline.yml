@@ -1,0 +1,114 @@
+---
+
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/devops/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/devops/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+resources:
+
+- name: git-image
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/alpine
+    tag: git
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+    
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+
+- name: version
+  type: semver
+  source:
+    driver: git
+    uri: https://bitbucket.org/corvesta/devops.versions.git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+    file: ((REPO_NAME))
+
+- name: resource-((REPO_NAME))
+  type: git
+  check_timeout: 5m
+  source:
+    uri: https://bitbucket.org/corvesta/((REPO_NAME)).git
+    branch: ((BRANCH))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+jobs:
+- name: build-((REPO_NAME))
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - get: git-image
+    - get: resource-((REPO_NAME))
+      trigger: true
+    - put: version
+      params: {bump: patch}
+    - task: bumping_version
+      privileged: true
+      image: git-image      
+      config:
+        platform: linux
+        params:
+          BITBUCKET_USER: ((bitbucket-username))
+          BITBUCKERT_PASSWORD: ((bitbucket-apppassword))
+          REPO_NAME: ((REPO_NAME))
+        inputs:
+          - name: version
+          - name: resource-((REPO_NAME))
+        run:
+          path: sh
+          args:
+            - -ec
+            - |
+              ls -la
+              pwd
+              whoami
+              echo 'Create .netrc for github'
+              touch ~/.netrc
+              echo "machine bitbucket.org" >> ~/.netrc
+              echo "login ${BITBUCKET_USER}" >> ~/.netrc
+              echo "password ${BITBUCKERT_PASSWORD}" >> ~/.netrc
+              ls -la version
+              export VERSION=`cat version/version`
+              echo $VERSION
+              echo 'Built new version of ci repo ${VERSION}'
+              cd resource-${REPO_NAME}
+              echo $VERSION
+              git tag ${VERSION} && git push origin ${VERSION}
+              echo 'Update bitbucket tag for repo'

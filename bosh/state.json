@@ -1,0 +1,48 @@
+{
+    "director_id": "d4d4ae90-29eb-46d7-7597-53f9cc2e8e23",
+    "installation_id": "304df705-28e9-4f01-67b5-a4e7a1d934d4",
+    "current_vm_cid": "i-06168c76f1ec5e55c",
+    "current_stemcell_id": "7aa0d38a-7493-4603-6aac-4498c7306973",
+    "current_disk_id": "e43f0800-358a-4e14-517a-b0245f6b95dd",
+    "current_release_ids": [
+        "23c3bcaf-bf18-452a-7e2a-5df0a4a10109",
+        "57b27cad-65a3-4f29-5f40-a699b5250b2c",
+        "6e5a2cb3-d8ff-4a2d-6351-50a24c9b0965"
+    ],
+    "current_manifest_sha": "ad9180b0edd558996ae7280f251ef8e42c64e0097329e6df856e76b8c2b585e471dc7e38a920a7f26681ffb29f0d9d49c54b63133ff9e179ad1993f0abe6ad12",
+    "disks": [
+        {
+            "id": "e43f0800-358a-4e14-517a-b0245f6b95dd",
+            "cid": "vol-0292a66f9029e9efb",
+            "size": 65536,
+            "cloud_properties": {
+                "type": "gp2"
+            }
+        }
+    ],
+    "stemcells": [
+        {
+            "id": "7aa0d38a-7493-4603-6aac-4498c7306973",
+            "name": "bosh-aws-xen-hvm-ubuntu-xenial-go_agent",
+            "version": "97.12",
+            "cid": "ami-03282638808c003e2 light"
+        }
+    ],
+    "releases": [
+        {
+            "id": "23c3bcaf-bf18-452a-7e2a-5df0a4a10109",
+            "name": "bosh",
+            "version": "267.5.0"
+        },
+        {
+            "id": "57b27cad-65a3-4f29-5f40-a699b5250b2c",
+            "name": "bpm",
+            "version": "0.11.0"
+        },
+        {
+            "id": "6e5a2cb3-d8ff-4a2d-6351-50a24c9b0965",
+            "name": "bosh-aws-cpi",
+            "version": "72"
+        }
+    ]
+}

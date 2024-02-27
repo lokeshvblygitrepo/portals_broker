@@ -1,0 +1,9 @@
+PROJECT: s3-claim-attachment-lambda
+CI_VERSION : 2.0.151
+TERRAFORM_PROJECT: s3-claim-attachment-lambda
+TEAM_CHANNEL: devops-cicd
+BUILD_TYPE: JAVA
+DEPLOY: lambda_terraform_deploy_2021
+CI_IMAGE: ci-alpine-lambda-java8
+CI_IMAGE_TAG: 1.0.0
+PIP_PATH: ""

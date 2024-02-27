@@ -1,0 +1,19 @@
+CI_VERSION : 2.0.207
+TEAM_CHANNEL: ice_ci
+PROJECT: ice.ci.ee_standardize
+TERRAFORM_PROJECT: ice_ee_standardize
+CONTAINER_IMAGE: ice-ee-standardize
+SERVICE_NAME: talend_service
+BUILD_TYPE: TALEND
+MAVEN_BUILD_VERSION: 1.0.1
+SKIP_TEST: true
+LOGLEVEL: ERROR
+FILTER: EE_standardize_stage
+MASTER_REPO: icegateway
+CONTAINER_TAGS: nomad
+DEPLOY_DEV:   deploy_nomad_jobs
+DEPLOY_QA:    deploy_nomad_jobs
+DEPLOY_STAGE: deploy_nomad_jobs
+DEPLOY_TRAIN: deploy_nomad_jobs
+DEPLOY_PREP:  deploy_nomad_jobs
+DEPLOY_PROD:  deploy_nomad_jobs

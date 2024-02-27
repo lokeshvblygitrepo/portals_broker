@@ -1,0 +1,231 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: git-bitbucket-pr
+  type: docker-image
+  source:
+    repository: zarplata/concourse-git-bitbucket-pr-resource
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+
+- name: resource-devops.ci
+  type: git
+  check_every: 10m
+  check_timeout: 5m
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: nomad_alert
+  type: git
+  check_timeout: 5m
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.infra.nomad_alert.git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: dev
+  type: git
+  check_timeout: 5m
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: develop
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: qa
+  type: git
+  check_timeout: 5m
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: qa
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: master
+  type: git
+  check_timeout: 5m
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: resource-build-nomad
+  type: docker-image
+  check_timeout: 5m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourseci-build-java
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+    tag: 1.0.1
+
+- name: nomad_deploy
+  type: docker-image
+  check_timeout: 5m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/nomad-cli
+    tag: 0.0.2
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+
+- name: ecr-((CONTAINER_IMAGE))
+  type: docker-image
+  check_timeout: 5m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/((CONTAINER_IMAGE))
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: DEV_CONSUL_TOKEN
+  type: s3
+  check_timeout: 5m
+  source:
+    bucket: cv-dev-consul
+    versioned_file: tokens/kv-write
+    access_key_id: ((DEV_AWS_ACCESS_KEY_ID))
+    secret_access_key: ((DEV_AWS_SECRET_ACCESS_KEY))
+
+groups:
+- name: development
+  jobs:
+  - build_container
+
+- name: test
+  jobs:
+  - deploy_qa
+
+- name: production
+  jobs:
+  - deploy_mgmt
+
+jobs:
+- name: build_container
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: resource-build-nomad
+      - get: dev
+        trigger: true
+    - task: build-nomad-artifact
+      privileged: true
+      image: resource-build-nomad
+      file: resource-devops.ci/tasks/task_build_docker.yml
+      input_mapping: {CODE: dev}
+      params:
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((DEV_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((DEV_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        VAULT_TOKEN: ((VAULT_TOKEN))
+      on_success:
+        put:  ecr-((CONTAINER_IMAGE))
+        params:
+          build: code_build
+          input: code_build
+          tag: code_build/commit.txt
+          tag_as_latest: true
+          build_args:
+            GIT_USERNAME: ((bitbucket-username))
+            GIT_PASSWORD: ((bitbucket-apppassword))
+          get_params: { skip_download: true }
+
+- name: deploy_qa
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: nomad_deploy
+      - get: nomad_alert
+      - get: DEV_CONSUL_TOKEN
+      - get: qa
+        trigger: true
+    - task: nomad-deploy-to-qa
+      privileged: true
+      image: nomad_deploy
+      file: resource-devops.ci/tasks/deploy_nomad_jobs.yml
+      input_mapping:
+        source_code: qa
+        consultoken: DEV_CONSUL_TOKEN
+      params:
+        ENV: mgmt
+        TERRAFORM_ENV: mgmt-qa
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        MGMTQA: true
+
+- name: deploy_mgmt
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: nomad_deploy
+      - get: nomad_alert
+      - get: DEV_CONSUL_TOKEN
+      - get: master
+        trigger: true
+    - task: nomad-deploy-to-prod
+      privileged: true
+      image: nomad_deploy
+      file: resource-devops.ci/tasks/deploy_nomad_jobs.yml
+      input_mapping:
+        source_code: master
+        consultoken: DEV_CONSUL_TOKEN
+      params:
+        ENV: mgmt
+        TERRAFORM_ENV: mgmt
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))

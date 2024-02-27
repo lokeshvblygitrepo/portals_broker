@@ -1,0 +1,7 @@
+CI_VERSION : 2.0.104
+PROJECT: helloworld.lib
+BUILD_TYPE: JAVA_LIB
+LOGLEVEL: INFO
+TEAM_CHANNEL: helloworld
+MAVEN_BUILD_VERSION: 1.0.1
+BUILD_CONTAINER: concourseci-build-java

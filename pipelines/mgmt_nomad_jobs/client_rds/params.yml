@@ -1,0 +1,7 @@
+CI_VERSION : 2.0.151
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.infra.client_rds
+CONTAINER_IMAGE: nomad-client-rds
+SERVICE_NAME: nomad_service
+BUILD_TYPE: NOMAD_SERVICE
+CONTAINER_TAGS: nomad

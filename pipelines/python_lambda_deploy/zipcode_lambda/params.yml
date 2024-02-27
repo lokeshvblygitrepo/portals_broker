@@ -1,0 +1,4 @@
+PROJECT: zipcode.lambda
+CI_VERSION: 2.0.114
+TERRAFORM_PROJECT: zipcode-lambda
+TEAM_CHANNEL: notice

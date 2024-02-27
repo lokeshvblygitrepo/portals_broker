@@ -1,0 +1,18 @@
+TEAM_CHANNEL: portals_ci
+CI_VERSION : 2.0.214
+PROJECT: provider.portal
+TERRAFORM_PROJECT: provider_portal
+CONTAINER_IMAGE: provider-portal
+SERVICE_NAME: node_service
+SKIP_TEST: true
+LOGLEVEL: ERROR
+BUILD_TYPE: NODE
+VERRACODE_APP: provider.portal
+VALIDATE_NGINX_CONFIGS: false
+DEPLOY: terraform_deploy_node
+DEPLOY_DEV: terraform_deploy_node
+DEPLOY_QA: terraform_deploy_node
+DEPLOY_STAGE: terraform_deploy_node
+DEPLOY_TRAIN: terraform_deploy_node
+DEPLOY_PREP: terraform_deploy_node
+DEPLOY_PROD: terraform_deploy_node

@@ -1,0 +1,197 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: git-bitbucket-pr
+  type: docker-image
+  source:
+    repository: zarplata/concourse-git-bitbucket-pr-resource
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+
+- name: resource-devops.ci
+  type: git
+  check_every: 10m
+  check_timeout: 5m
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: stage
+  type: git
+  check_timeout: 5m
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: stage
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: master
+  type: git
+  check_timeout: 5m
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: terraform_deploy
+  type: docker-image
+  check_timeout: 5m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourseci-alpine-p3-tf
+    tag: 1.0.0
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+groups:
+
+- name: stage
+  jobs:
+  - promote_((PROJECT))_and_deploy_stage_infra_to_mgmt
+  - promote_((PROJECT))_and_deploy_train_infra_to_mgmt
+
+- name: production
+  jobs:
+  - promote_((PROJECT))_and_deploy_prep_infra_to_mgmt
+  - promote_((PROJECT))_and_deploy_prod_infra_to_mgmt
+
+jobs:
+
+- name: promote_((PROJECT))_and_deploy_stage_infra_to_mgmt
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: stage
+        trigger: true
+      - get: resource-devops.ci
+      - get: terraform_deploy
+    - task: terraform-deploy
+      privileged: true
+      image: terraform_deploy
+      file: resource-devops.ci/tasks/((DEPLOY)).yml
+      input_mapping: {CODE: stage}
+      params:
+        TERRAFORM_ENV: mgmt
+        TERRAFORM_TARGET_ENV: stage
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        TERRAFORM_TEAM_TOKEN: ((TERRAFORM_TEAM_TOKEN))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: promote_((PROJECT))_and_deploy_train_infra_to_mgmt
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: stage
+        trigger: true
+        passed: [promote_((PROJECT))_and_deploy_stage_infra_to_mgmt]
+      - get: resource-devops.ci
+      - get: terraform_deploy
+    - task: terraform-deploy
+      privileged: true
+      image: terraform_deploy
+      file: resource-devops.ci/tasks/((DEPLOY)).yml
+      input_mapping: {CODE: stage}
+      params:
+        TERRAFORM_ENV: mgmt
+        TERRAFORM_TARGET_ENV: train
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        TERRAFORM_TEAM_TOKEN: ((TERRAFORM_TEAM_TOKEN))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: promote_((PROJECT))_and_deploy_prep_infra_to_mgmt
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: terraform_deploy
+      - get: master
+        trigger: true
+    - task: deploy-container-to-preprod
+      privileged: true
+      image: terraform_deploy
+      file: resource-devops.ci/tasks/((DEPLOY)).yml
+      input_mapping: {CODE: master}
+      params:
+        TERRAFORM_ENV: mgmt
+        TERRAFORM_TARGET_ENV: prep
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        TERRAFORM_TEAM_TOKEN: ((TERRAFORM_TEAM_TOKEN))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: promote_((PROJECT))_and_deploy_prod_infra_to_mgmt
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: master
+        passed: [promote_((PROJECT))_and_deploy_prep_infra_to_mgmt]
+      - get: resource-devops.ci
+      - get: terraform_deploy
+    - task: terraform-deploy
+      privileged: true
+      image: terraform_deploy
+      file: resource-devops.ci/tasks/((DEPLOY)).yml
+      input_mapping: {CODE: master}
+      params:
+        TERRAFORM_ENV: mgmt
+        TERRAFORM_TARGET_ENV: prod
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        TERRAFORM_TEAM_TOKEN: ((TERRAFORM_TEAM_TOKEN))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))

@@ -1,0 +1,97 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  tags: [talend]
+  source:
+    url: ((slack_channel))
+
+- name: resource-devops.ci
+  type: git
+  tags: [talend]
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: MASTER
+  type: git
+  tags: [talend]
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: Nomad Deploy
+  type: docker-image
+  tags: [spring]
+  source:
+    repository: 038131160342.dkr.ecr.us-west-2.amazonaws.com/nomad-cli
+    tag: 0.0.1
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+groups:
+- name: prod
+  jobs:
+  - Deploy container to Production DR
+
+jobs:
+- name: Deploy container to Production DR
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: Nomad Deploy
+        tags: [spring]
+      - get: MASTER
+        tags: [spring]
+    - task: nomad-deploy-to-train
+      privileged: true
+      tags: [spring]
+      image: Nomad Deploy
+      file: resource-devops.ci/tasks/deploy_nomad_jobs.yml
+      input_mapping: {source_code: MASTER}
+      params:
+        ENV: proddr
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))

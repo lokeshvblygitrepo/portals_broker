@@ -1,0 +1,6 @@
+
+CI_VERSION : 2.0.104
+TEAM_CHANNEL: devops
+PROJECT1: consul.keys
+PROJECT2: consul.keys.lookup
+AWS_REGION: us-east-1

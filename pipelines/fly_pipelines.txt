@@ -1,0 +1,43 @@
+###############
+# REPO BUILDs #
+###############
+fly7 -t keyspringnew set-pipeline -p devops.infra.module -c repo_builds/pipeline.yml -l repo_builds/devops.infra.modules/params.yml
+fly7 -t keyspringnew set-pipeline -p datadog.infra.module -c repo_builds/pipeline.yml -l repo_builds/datadog.infra.modules/params.yml
+fly7 -t keyspringnew set-pipeline -p devops.ci -c repo_builds/pipeline.yml -l repo_builds/devops.ci/params.yml
+fly7 -t keyspringnew set-pipeline -p devops.infra.nomad_python -c repo_builds/pipeline.yml -l repo_builds/devops.infra.nomad_python/params.yml
+fly7 -t keyspringnew set-pipeline -p qa.automation.cicd_function_library -c repo_builds/pipeline.yml -l repo_builds/qa.automation.cicd_function_library/params.yml
+
+
+
+##### pipeline to build pipelines #####
+fly -t keyspring set-pipeline -p devops.pipeline-builds -c run_fly.yml
+
+
+#### TESTING HELLO WORLD BUILDS AND DEPLOYS ####
+fly -t keyspring set-pipeline -p hello-world-service -c service_build_deploy/pipeline.yml -l service_build_deploy/hello-world-service/params.yml
+fly -t keyspring set-pipeline -p helloworld.portal -c node_build_deploy/pipeline.yml -l node_build_deploy/helloworld.portal/params.yml
+fly -t keyspring set-pipeline -p hello-world-data-dog -c service_build_deploy/pipeline.yml -l service_build_deploy/hello-world-data-dog/params.yml
+fly -t keyspring set-pipeline -p hello-world-new-proxy -c mule_build_deploy/pipeline.yml -l mule_build_deploy/hello-world-new-proxy/params.yml
+fly -t keyspring set-pipeline -p hello-world-talend -c talend_build_deploy/pipeline.yml -l talend_build_deploy/hello-world-talend/params.yml
+fly -t keyspring set-pipeline -p hello-world-clover -c clover_deploy/pipeline.yml -l clover_deploy/hello-world-clover/params.yml
+fly -t keyspring set-pipeline -p hello-world-job -c java_container_job_builds/pipeline.yml -l java_container_job_builds/hello-world-job/params.yml
+fly -t keyspring set-pipeline -p architecture -c tools_build_deploy/pipeline.yml -l tools_build_deploy/architecture/params.yml
+fly -t keyspring set-pipeline -p hello-world-multi-tenant-postgres -c postgres_db_deploys/pipeline.yml -l postgres_db_deploys/hello-world-multi-tenant-postgres/params.yml
+fly -t keyspring set-pipeline -p authorizer_lambda_function -c lambda_deploy/pipeline.yml -l lambda_deploy/authorizer_lambda_function/params.yml
+fly -t keyspring set-pipeline -p alfresco_sdk -c alfresco_build_deploy/pipeline.yml -l alfresco_build_deploy/alfresco-sdk/params.yml
+fly -t keyspring set-pipeline -p onboarding -c onboarding/pipeline.yml -l onboarding/onboarding/params.yml
+fly -t keyspring set-pipeline -p magnolia_author_service -c magnolia_deploy/pipeline.yml -l magnolia_deploy/magnolia_author_service/params.yml
+fly -t keyspring set-pipeline -p magnolia_public_service -c magnolia_deploy/pipeline.yml -l magnolia_deploy/magnolia_public_service/params.yml
+fly -t keyspring set-pipeline -p ice_id_file -c docker_nomad_jobs/pipeline.yml -l docker_nomad_jobs/ice_id_file/params.yml
+fly -t keyspring set-pipeline -p hello-world-data-dog-mgmt -c mgmt_services_build_deploy/pipeline.yml -l mgmt_services_build_deploy/hello-world-data-dog-mgmt/params.yml
+fly -t keyspring set-pipeline -p nomad-dispatcher-mgmt -c mgmt_services_build_deploy/pipeline.yml -l mgmt_services_build_deploy/nomad-dispatcher-service-mgmt/params.yml
+fly -t keyspring set-pipeline -p hello-world-portal-mgmt -c mgmt_node_build_deploy/pipeline.yml -l mgmt_node_build_deploy/hello-world-portal-mgmt/params.yml
+fly -t keyspring set-pipeline -p hello_django -c django_build_deploy_mgmt/pipeline.yml -l django_build_deploy_mgmt/hello_django/params.yml
+fly -t keyspring set-pipeline -p hello_django -c django_build_deploy/pipeline.yml -l django_build_deploy/hello_django/params.yml
+fly -t keyspring set-pipeline -p zipcode_lambda_deploy -c python_lambda_deploy/pipeline.yml -l python_lambda_deploy/zipcode_lambda/params.yml
+fly -t keyspring set-pipeline -p data_encara_lambda_deploy -c python_lambda_deploy/pipeline.yml -l python_lambda_deploy/data_encara_lambda/params.yml
+fly -t keyspring set-pipeline -p corvesta_specs -c ecs_service_build_deploy/pipeline.yml -l ecs_service_build_deploy/specs/params.yml
+fly -t keyspring set-pipeline -p failed-he-claims-attach -c lambda_deploy_2021/pipeline.yml -l lambda_deploy_2021/failed-he-claims-attach/params.yml
+
+### Consul Keys Pipeline ###
+fly -t keyspring set-pipeline -p to_config -c git2consul_keys/pipeline.yml -l git2consul_keys/to_config/params.yml

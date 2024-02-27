@@ -1,0 +1,107 @@
+---
+
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+
+- name: version
+  type: semver
+  source:
+    driver: git
+    uri: https://bitbucket.org/corvesta/devops.versions.git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+    file: ((REPO_NAME))
+
+- name: resource-((REPO_NAME))
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/((REPO_NAME)).git
+    branch: ((BRANCH))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+jobs:
+- name: build-((REPO_NAME))
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - get: resource-((REPO_NAME))
+      trigger: true
+    - put: version
+      params: {bump: patch}
+    - task: bumping version
+      privileged: true
+      config:
+        platform: linux
+        image_resource:
+          type: docker-image
+          source:
+            repository: alpine/git
+            tag: latest
+        params:
+          BITBUCKET_USER: ((bitbucket-username))
+          BITBUCKERT_PASSWORD: ((bitbucket-apppassword))
+          REPO_NAME: ((REPO_NAME))
+
+        inputs:
+          - name: version
+          - name: resource-((REPO_NAME))
+        run:
+          path: sh
+          args:
+            - -ec
+            - |
+              ls -la
+              pwd
+              whoami
+              echo 'Create .netrc for github'
+              touch ~/.netrc
+              echo "machine bitbucket.org" >> ~/.netrc
+              echo "login ${BITBUCKET_USER}" >> ~/.netrc
+              echo "password ${BITBUCKERT_PASSWORD}" >> ~/.netrc
+              ls -la version
+              export VERSION=`cat version/version`
+              echo $VERSION
+              echo 'Built new version of ci repo ${VERSION}'
+              cd resource-${REPO_NAME}
+              echo $VERSION
+              git tag ${VERSION} && git push origin ${VERSION}
+              echo 'Update bitbucket tag for repo'

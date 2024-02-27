@@ -1,0 +1,12 @@
+CI_VERSION : 2.0.104
+TEAM_CHANNEL: helloworld
+PROJECT: helloworld.datadog
+TERRAFORM_PROJECT: hello_world_data_dog
+CONTAINER_IMAGE: hello-world-data-dog
+SERVICE_NAME: mgmt_service
+BUILD_TYPE: JAVA
+MAVEN_BUILD_VERSION: 1.0.1
+SKIP_TEST: true
+LOGLEVEL: ERROR
+CONTAINER_TAGS: datadog helloworld
+PR: false

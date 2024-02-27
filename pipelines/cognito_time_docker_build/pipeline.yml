@@ -1,0 +1,299 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concourseci.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concourseci.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  tags: [talend]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+resources:
+- name: trigger-midnight
+  type: time
+  source:
+    start: 12:00 AM
+    stop: 12:30 AM
+    location: America/New_York
+
+- name: slack-alert
+  type: slack-notification
+  tags: [talend]
+  source:
+    url: ((slack_channel))
+
+- name: MASTER
+  type: git
+  tags: [talend]
+  check_timeout: 5m
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: ecr-((CONTAINER_IMAGE))
+  type: docker-image
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/((CONTAINER_IMAGE))
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+groups:
+- name: development
+  jobs:
+  - build_container
+  - backup_dev
+  - backup_sandbox
+
+- name: test
+  jobs:
+  - backup_qa
+
+- name: stage
+  jobs:
+  - backup_stage
+  - backup_train
+
+
+- name: production
+  jobs:
+  - backup_prep
+  - backup_prod
+
+
+jobs:
+- name: build_container
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+  - get: MASTER
+    trigger: true
+  - put: ecr-((CONTAINER_IMAGE))
+    tags: [talend]
+    params:
+      build: MASTER
+      input: MASTER
+      tag_as_latest: true
+      build_args:
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+      get_params: { skip_download: true }
+
+- name: backup_dev
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: trigger-midnight
+        trigger: true
+      - get: ecr-((CONTAINER_IMAGE))
+        trigger: true
+        tags: [talend]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-dev
+      privileged: true
+      tags: [talend]
+      image: ecr-((CONTAINER_IMAGE))
+      config:
+        platform: linux
+        run:
+          path: bash
+          args: [/app/cognito.sh]
+      params:
+        AWS_ENV: dev
+        AWS_SECRET_ACCESS_KEY: ((DEV_AWS_SECRET_ACCESS_KEY))
+        AWS_ACCESS_KEY_ID: ((DEV_AWS_ACCESS_KEY_ID))
+
+- name: backup_sandbox
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: trigger-midnight
+        trigger: true
+      - get: ecr-((CONTAINER_IMAGE))
+        trigger: true
+        tags: [talend]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-sandbox
+      privileged: true
+      tags: [talend]
+      image: ecr-((CONTAINER_IMAGE))
+      config:
+        platform: linux
+        run:
+          path: bash
+          args: [/app/cognito.sh]
+      params:
+        AWS_ENV: sand
+        AWS_SECRET_ACCESS_KEY: ((DEV_AWS_SECRET_ACCESS_KEY))
+        AWS_ACCESS_KEY_ID: ((DEV_AWS_ACCESS_KEY_ID))
+
+
+- name: backup_qa
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: trigger-midnight
+        trigger: true
+      - get: ecr-((CONTAINER_IMAGE))
+        trigger: true
+        tags: [talend]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-qa
+      privileged: true
+      tags: [talend]
+      image: ecr-((CONTAINER_IMAGE))
+      config:
+        platform: linux
+        run:
+          path: bash
+          args: [/app/cognito.sh]
+      params:
+        AWS_ENV: qa
+        AWS_SECRET_ACCESS_KEY: ((QA_AWS_SECRET_ACCESS_KEY))
+        AWS_ACCESS_KEY_ID: ((QA_AWS_ACCESS_KEY_ID))
+
+- name: backup_stage
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: trigger-midnight
+        trigger: true
+      - get: ecr-((CONTAINER_IMAGE))
+        trigger: true
+        tags: [talend]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-stage
+      privileged: true
+      tags: [talend]
+      image: ecr-((CONTAINER_IMAGE))
+      config:
+        platform: linux
+        run:
+          path: bash
+          args: [/app/cognito.sh]
+      params:
+        AWS_ENV: stage
+        AWS_SECRET_ACCESS_KEY: ((STAGE_AWS_SECRET_ACCESS_KEY))
+        AWS_ACCESS_KEY_ID: ((STAGE_AWS_ACCESS_KEY_ID))
+
+- name: backup_train
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: trigger-midnight
+        trigger: true
+      - get: ecr-((CONTAINER_IMAGE))
+        trigger: true
+        tags: [talend]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-train
+      privileged: true
+      tags: [talend]
+      image: ecr-((CONTAINER_IMAGE))
+      config:
+        platform: linux
+        run:
+          path: bash
+          args: [/app/cognito.sh]
+      params:
+        AWS_ENV: train
+        AWS_SECRET_ACCESS_KEY: ((TRAIN_AWS_SECRET_ACCESS_KEY))
+        AWS_ACCESS_KEY_ID: ((TRAIN_AWS_ACCESS_KEY_ID))
+
+- name: backup_prep
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: trigger-midnight
+        trigger: true
+      - get: ecr-((CONTAINER_IMAGE))
+        trigger: true
+        tags: [talend]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-prep
+      privileged: true
+      tags: [talend]
+      image: ecr-((CONTAINER_IMAGE))
+      config:
+        platform: linux
+        run:
+          path: bash
+          args: [/app/cognito.sh]
+      params:
+        AWS_ENV: prep
+        AWS_SECRET_ACCESS_KEY: ((PREP_AWS_SECRET_ACCESS_KEY))
+        AWS_ACCESS_KEY_ID: ((PREP_AWS_ACCESS_KEY_ID))
+
+- name: backup_prod
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: trigger-midnight
+        trigger: true
+      - get: ecr-((CONTAINER_IMAGE))
+        trigger: true
+        tags: [talend]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-prod
+      privileged: true
+      tags: [talend]
+      image: ecr-((CONTAINER_IMAGE))
+      config:
+        platform: linux
+        run:
+          path: bash
+          args: [/app/cognito.sh]
+      params:
+        AWS_ENV: prod
+        AWS_SECRET_ACCESS_KEY: ((PROD_AWS_SECRET_ACCESS_KEY))
+        AWS_ACCESS_KEY_ID: ((PROD_AWS_ACCESS_KEY_ID))

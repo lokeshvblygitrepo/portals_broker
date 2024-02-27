@@ -1,0 +1,105 @@
+---
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+
+resources:
+
+- name: dcind
+  type: docker-image
+  source:
+    repository: w32blaster/dcind
+
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+
+
+- name: resource-devops.ci
+  type: git
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: resource-data.architecture
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/data.architecture.git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: MASTER
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+groups:
+- name: production
+  jobs:
+  - deploy PRODUCTION ((PROJECT)) Postgres DB
+
+jobs:
+- name: deploy PRODUCTION ((PROJECT)) Postgres DB
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: dcind
+      - get: resource-data.architecture
+      - get: MASTER
+    - task: resource-build-postgres-database
+      privileged: true
+      image: dcind
+      params:
+        LOGLEVEL: ((LOGLEVEL))
+        GITREPONAME: ((PROJECT))
+        TYPE: ((BUILD_TYPE))
+        LIQUIBASE_PORT: ((LIQUIBASE_PORT))
+        LIQUIBASE_DATABASE: ((LIQUIBASE_DATABASE))
+        LIQUIBASE_USERNAME: ((LIQUIBASE_USERNAME))
+        LIQUIBASE_PASSWORD: ((PROD_LIQUIBASE_PASSWORD))
+        LIQUIBASE_CHANGELOG: ((LIQUIBASE_CHANGELOG))
+        LIQUIBASE_LOGLEVEL: ((LIQUIBASE_LOGLEVEL))
+        LIQUIBASE_CLASSPATH: ((LIQUIBASE_CLASSPATH))
+        LIQUIBASE_DRIVER: ((LIQUIBASE_DRIVER))
+        DB_INSTANCE: ((DB_INSTANCE))
+        ENV: proddr
+      file: resource-devops.ci/tasks/deploy_postgres_db.yml
+      input_mapping: {CODE: MASTER}
+

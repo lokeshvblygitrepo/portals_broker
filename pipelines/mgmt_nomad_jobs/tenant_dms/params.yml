@@ -1,0 +1,9 @@
+CI_VERSION : 2.0.151
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.infra.dms
+CONTAINER_IMAGE: nomad-tenant-dms
+SERVICE_NAME: nomad_service
+BUILD_TYPE: NOMAD_SERVICE
+SKIP_TEST: true
+LOGLEVEL: ERROR
+CONTAINER_TAGS: nomad

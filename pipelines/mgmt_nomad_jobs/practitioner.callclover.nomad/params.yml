@@ -1,0 +1,7 @@
+CI_VERSION : 2.0.151
+TEAM_CHANNEL: devops-cicd
+PROJECT: practitioner.callclover.nomad
+CONTAINER_IMAGE: clovercall
+SERVICE_NAME: nomad_service
+BUILD_TYPE: NOMAD_SERVICE
+CONTAINER_TAGS: nomad

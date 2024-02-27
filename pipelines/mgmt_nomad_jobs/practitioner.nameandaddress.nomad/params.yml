@@ -1,0 +1,7 @@
+CI_VERSION : 2.0.151
+TEAM_CHANNEL: practitioner
+PROJECT: practitioner.nameandaddress.nomad
+CONTAINER_IMAGE: practitioner-nameandaddress-nomad
+SERVICE_NAME: nomad_service
+BUILD_TYPE: NOMAD_SERVICE
+CONTAINER_TAGS: nomad

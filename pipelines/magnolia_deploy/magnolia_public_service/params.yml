@@ -1,0 +1,11 @@
+CI_VERSION : FOUND-7834
+TEAM_CHANNEL: magnolia_ci
+PROJECT: magnolia.public
+TERRAFORM_PROJECT: magnolia_public_service
+CONTAINER_IMAGE: magnolia-public-service
+SERVICE_NAME: magnolia_service
+BUILD_TYPE: MAGNOLIA
+MAVEN_BUILD_VERSION: 1.0.1
+SKIP_TEST: false
+LOGLEVEL: INFO
+DEPLOY: terraform_deploy_node

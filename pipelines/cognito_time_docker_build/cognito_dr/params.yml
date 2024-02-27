@@ -1,0 +1,3 @@
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.infra.cognito-dr
+CONTAINER_IMAGE: cognito-dr-image

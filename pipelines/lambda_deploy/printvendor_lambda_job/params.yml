@@ -1,0 +1,6 @@
+PROJECT: devops.infra.sftp_to_s3
+CI_VERSION: 2.0.181
+TERRAFORM_PROJECT: printvendor_lambda_job
+TEAM_CHANNEL: devops-cicd
+BUILD_TYPE: PYTHON
+PIP_PATH: ''

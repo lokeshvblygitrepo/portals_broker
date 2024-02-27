@@ -1,0 +1,349 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+    get_params: { skip_download: true }
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+    get_params: { skip_download: true }
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  check_every: 5m 
+  source:
+    url: ((slack_channel))
+
+- name: resource-devops.ci
+  type: git
+  check_every: 5m
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    private_key: ((bitbucket-ssh))
+
+- name: dev
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT1)).git
+    branch: develop
+    private_key: ((bitbucket-ssh))
+
+- name: dev-lookup
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT2)).git
+    branch: develop
+    private_key: ((bitbucket-ssh))
+
+- name: qa
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT1)).git
+    branch: qa
+    private_key: ((bitbucket-ssh))
+
+- name: qa-lookup
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT2)).git
+    branch: qa
+    private_key: ((bitbucket-ssh))
+
+- name: stage
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT1)).git
+    branch: stage
+    private_key: ((bitbucket-ssh))
+
+- name: stage-lookup
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT2)).git
+    branch: stage
+    private_key: ((bitbucket-ssh))
+
+- name: train
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT1)).git
+    branch: train
+    private_key: ((bitbucket-ssh))
+
+- name: train-lookup
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT2)).git
+    branch: train
+    private_key: ((bitbucket-ssh))
+
+- name: preprod
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT1)).git
+    branch: prep
+    private_key: ((bitbucket-ssh))
+
+- name: preprod-lookup
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT2)).git
+    branch: prep
+    private_key: ((bitbucket-ssh))
+
+- name: master
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT1)).git
+    branch: master
+    private_key: ((bitbucket-ssh))
+
+- name: master-lookup
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT2)).git
+    branch: master
+    private_key: ((bitbucket-ssh))
+
+
+- name: terraform_deploy
+  type: docker-image
+  check_every: 5m
+  check_timeout: 5m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourseci-deploy
+    tag: 0.13.3
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+groups:
+- name: development
+  jobs:
+  - upload_((PROJECT1))_to_dev
+
+- name: test
+  jobs:
+  - upload_((PROJECT1))_to_qa
+
+- name: stage
+  jobs:
+  - upload_((PROJECT1))_to_stage
+  - upload_((PROJECT1))_to_train
+
+- name: production
+  jobs:
+  - upload_((PROJECT1))_to_preprod
+  - upload_((PROJECT1))_to_prod
+
+jobs:
+- name: upload_((PROJECT1))_to_dev
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: terraform_deploy
+      - get: dev-lookup
+      - get: dev
+        trigger: true
+    - task: upload-configs-from-git
+      privileged: true
+      image: terraform_deploy
+      file: resource-devops.ci/tasks/consulkeys.yml
+      input_mapping:
+        CODE: dev
+        LOOKUP: dev-lookup
+      params:
+        STEP: APPLY
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_ACCESS_KEY_ID: ((DEV_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((DEV_AWS_SECRET_ACCESS_KEY))
+        TERRAFORM_ENV: development
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: upload_((PROJECT1))_to_qa
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: terraform_deploy
+      - get: qa-lookup
+      - get: qa
+        trigger: true
+    - task: upload-configs-from-git
+      privileged: true
+      image: terraform_deploy
+      file: resource-devops.ci/tasks/consulkeys.yml
+      input_mapping:
+        CODE: qa
+        LOOKUP: qa-lookup
+      params:
+        STEP: APPLY
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_ACCESS_KEY_ID: ((QA_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((QA_AWS_SECRET_ACCESS_KEY))
+        TERRAFORM_ENV: qa
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: upload_((PROJECT1))_to_stage
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: terraform_deploy
+      - get: stage-lookup
+      - get: stage
+        trigger: true
+    - task: upload-configs-from-git
+      privileged: true
+      image: terraform_deploy
+      file: resource-devops.ci/tasks/consulkeys.yml
+      input_mapping:
+        CODE: stage
+        LOOKUP: stage-lookup
+      params:
+        STEP: APPLY
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_ACCESS_KEY_ID: ((STAGE_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((STAGE_AWS_SECRET_ACCESS_KEY))
+        TERRAFORM_ENV: staging
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: upload_((PROJECT1))_to_train
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: terraform_deploy
+      - get: train-lookup
+        trigger: true
+      - get: train
+        trigger: true
+    - task: upload-configs-from-git
+      privileged: true
+      image: terraform_deploy
+      file: resource-devops.ci/tasks/consulkeys.yml
+      input_mapping:
+        CODE: train
+        LOOKUP: train-lookup
+      params:
+        STEP: APPLY
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_ACCESS_KEY_ID: ((TRAIN_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((TRAIN_AWS_SECRET_ACCESS_KEY))
+        TERRAFORM_ENV: training
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: upload_((PROJECT1))_to_preprod
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: terraform_deploy
+      - get: preprod-lookup
+        trigger: true
+      - get: preprod
+        trigger: true
+    - task: upload-configs-from-git
+      privileged: true
+      image: terraform_deploy
+      file: resource-devops.ci/tasks/consulkeys.yml
+      input_mapping:
+        CODE: preprod
+        LOOKUP: preprod-lookup
+      params:
+        STEP: APPLY
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_ACCESS_KEY_ID: ((PREP_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((PREP_AWS_SECRET_ACCESS_KEY))
+        TERRAFORM_ENV: preprod
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: upload_((PROJECT1))_to_prod
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: terraform_deploy
+      - get: master-lookup
+      - get: master
+    - task: upload-configs-from-git
+      privileged: true
+      image: terraform_deploy
+      file: resource-devops.ci/tasks/consulkeys.yml
+      input_mapping:
+        CODE: master
+        LOOKUP: master-lookup
+      params:
+        STEP: APPLY
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_ACCESS_KEY_ID: ((PROD_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((PROD_AWS_SECRET_ACCESS_KEY))
+        TERRAFORM_ENV: prod
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))

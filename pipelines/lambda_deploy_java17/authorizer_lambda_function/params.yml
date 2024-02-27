@@ -1,0 +1,9 @@
+PROJECT: authorizer-lambda
+CI_VERSION: 2.0.217
+TERRAFORM_PROJECT: authorizer_lambda
+TEAM_CHANNEL: devops-cicd
+BUILD_TYPE: JAVA
+DEPLOY: lambda_terraform_deploy_java17
+CI_IMAGE: concourseci-deploy-java17
+CI_IMAGE_TAG: 0.13.4
+PIP_PATH: ''

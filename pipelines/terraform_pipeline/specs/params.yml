@@ -1,0 +1,5 @@
+CI_VERSION : 2.0.126
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.tools.specs
+TERRAFORM_PROJECT: specs
+DEPLOY: terraform_pipeline

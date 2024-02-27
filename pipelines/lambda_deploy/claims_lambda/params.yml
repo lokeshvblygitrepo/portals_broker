@@ -1,0 +1,6 @@
+PROJECT: claims.lambda
+CI_VERSION: 2.0.181
+TERRAFORM_PROJECT: claims-lambda
+TEAM_CHANNEL: practitioner
+BUILD_TYPE: PYTHON
+PIP_PATH: ''

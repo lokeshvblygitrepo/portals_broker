@@ -1,0 +1,19 @@
+TEAM_CHANNEL: correspondence-dev
+CI_VERSION : 2.0.209
+PROJECT: correspondence.mgmt.portal
+TERRAFORM_PROJECT: correspondence_portal
+CONTAINER_IMAGE: correspondence-portal
+SERVICE_NAME: node_service
+SKIP_TEST: true
+LOGLEVEL: ERROR
+BUILD_TYPE: NODE
+VERRACODE_APP: correspondence.mgmt.portal
+TERRAFORM_VERSION: 0.12.28
+VALIDATE_NGINX_CONFIGS: false
+DEPLOY: terraform_deploy_node
+DEPLOY_DEV: terraform_deploy_node_alb
+DEPLOY_QA: terraform_deploy_node_alb
+DEPLOY_STAGE: terraform_deploy_node_alb
+DEPLOY_TRAIN: terraform_deploy_node_alb
+DEPLOY_PREP: terraform_deploy_node_alb
+DEPLOY_PROD: terraform_deploy_node_alb

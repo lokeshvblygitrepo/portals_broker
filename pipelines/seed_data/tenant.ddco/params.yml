@@ -1,0 +1,6 @@
+CI_VERSION : 2.0.104
+TEAM_CHANNEL: data
+PROJECT: tenant.ddco
+LIQUIBASE_PORT: 5432
+CLIENT: ddco
+LOGLEVEL: warning

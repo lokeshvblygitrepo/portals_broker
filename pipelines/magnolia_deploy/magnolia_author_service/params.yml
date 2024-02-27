@@ -1,0 +1,11 @@
+CI_VERSION : 2.0.128
+TEAM_CHANNEL: magnolia_ci
+PROJECT: magnolia.author
+TERRAFORM_PROJECT: magnolia_author_service
+CONTAINER_IMAGE: magnolia-author-service
+SERVICE_NAME: ecs_service
+BUILD_TYPE: MAGNOLIA
+MAVEN_BUILD_VERSION: 1.0.1
+SKIP_TEST: false
+LOGLEVEL: INFO
+DEPLOY: terraform_ecs_deploy

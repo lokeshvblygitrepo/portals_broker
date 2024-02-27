@@ -1,0 +1,511 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concourseci.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+    get_params: { skip_download: true }
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concourseci.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+    get_params: { skip_download: true }
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  tags: [spring]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: git-bitbucket-pr
+  type: docker-image
+  tags: [spring]
+  source:
+    repository: zarplata/concourse-git-bitbucket-pr-resource
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  tags: [spring]
+  source:
+    url: ((slack_channel))
+
+- name: pullrequest
+  type: git-bitbucket-pr
+  tags: [spring]
+  source:
+    base_url: https://bitbucket.org
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+    project: corvesta
+    repository: ((PROJECT))
+    bitbucket_type: cloud
+    git:
+      uri: https://bitbucket.org/corvesta/((PROJECT))
+      username: ((bitbucket-username))
+      password: ((bitbucket-apppassword))
+    dir: pullrequest
+
+- name: resource-devops.ci
+  type: git
+  check_timeout: 5m
+  tags: [spring]
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: DEV
+  type: git
+  check_timeout: 5m
+  tags: [spring]
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: develop
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: QA
+  type: git
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: qa
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: STAGE
+  type: git
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: stage
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: MASTER
+  type: git
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: Nomad Deploy
+  type: docker-image
+  check_timeout: 5m
+  tags: [spring]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/nomad-cli
+    tag: 0.0.2
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: resource-build-java
+  type: docker-image
+  check_timeout: 5m
+  tags: [spring]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourseci-build-java
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+    tag: ((MAVEN_BUILD_VERSION))
+
+- name: nomad_alert
+  type: git
+  check_every: 5m
+  check_timeout: 5m
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.infra.nomad_alert.git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: ecr-((CONTAINER_IMAGE))
+  type: docker-image
+  check_timeout: 5m
+  tags: [spring]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/((CONTAINER_IMAGE))
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+groups:
+- name: development
+  jobs:
+  - Pull request
+  - build DEV container
+  - Deploy container to DEV
+  - Deploy container to Sandbox
+
+- name: test
+  jobs:
+  - Deploy container to QA
+
+- name: stage
+  jobs:
+  - Deploy container to Stage
+  - Deploy container to Training
+
+- name: production
+  jobs:
+  - Deploy container to PreProd
+  - Deploy container to Production
+
+
+jobs:
+- name: build DEV container
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: resource-build-java
+        tags: [spring]
+      - get: DEV
+        trigger: true
+        tags: [spring]
+    - task: build-java-nomad-artifact
+      privileged: true
+      tags: [spring]
+      image: resource-build-java
+      params:
+        ARTIFACTORYPASSWORD: ((ARTIFACTORYPASSWORD))
+        REPOSITORY_NAME: ((CONTAINER_IMAGE))
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        TYPE: ((BUILD_TYPE))
+        LOGLEVEL: ((LOGLEVEL))
+        SKIP_TEST: ((SKIP_TEST))
+        CONTAINER_TAGS: ((CONTAINER_TAGS))
+      file: resource-devops.ci/tasks/task_build_test_store.yml
+      input_mapping: {CODE: DEV}
+      on_success:
+        put: ecr-((CONTAINER_IMAGE))
+        tags: [spring]
+        params:
+          build: code_build
+          input: code_build
+          tag: code_build/commit.txt
+          additional_tags: code_build/additonal_tags.txt
+        get_params: { skip_download: true }
+
+
+- name: Deploy container to DEV
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: Nomad Deploy
+        tags: [spring]
+      - get: DEV
+        tags: [spring]
+      - get: nomad_alert
+        tags: [spring]
+      - get: ecr-((CONTAINER_IMAGE))
+        trigger: true
+        tags: [spring]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-dev
+      privileged: true
+      tags: [spring]
+      image: Nomad Deploy
+      file: resource-devops.ci/tasks/deploy_nomad_jobs.yml
+      input_mapping: {source_code: DEV}
+      params:
+        ENV: dev
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: Deploy container to Sandbox
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: Nomad Deploy
+        tags: [spring]
+      - get: DEV
+        tags: [spring]
+      - get: nomad_alert
+        tags: [spring]
+      - get: ecr-((CONTAINER_IMAGE))
+        tags: [spring]
+        trigger: true
+        passed: [Deploy container to DEV]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-sandbox
+      privileged: true
+      tags: [spring]
+      image: Nomad Deploy
+      file: resource-devops.ci/tasks/deploy_nomad_jobs.yml
+      input_mapping: {source_code: DEV}
+      params:
+        ENV: sand
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ENV_AWS_SECRET_ACCESS_KEY: ((DEV_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((DEV_AWS_ACCESS_KEY_ID))
+        TERRAFORM_ENV: sand
+
+- name: Deploy container to QA
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: Nomad Deploy
+        tags: [spring]
+      - get: QA
+        tags: [spring]
+      - get: nomad_alert
+        tags: [spring]
+      - get: ecr-((CONTAINER_IMAGE))
+        trigger: true
+        tags: [spring]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-qa
+      privileged: true
+      tags: [spring]
+      image: Nomad Deploy
+      file: resource-devops.ci/tasks/deploy_nomad_jobs.yml
+      input_mapping: {source_code: QA}
+      params:
+        ENV: qa
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ENV_AWS_SECRET_ACCESS_KEY: ((QA_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((QA_AWS_ACCESS_KEY_ID))
+        TERRAFORM_ENV: qa
+
+- name: Deploy container to Stage
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: Nomad Deploy
+        tags: [spring]
+      - get: STAGE
+        tags: [spring]
+      - get: nomad_alert
+        tags: [spring]
+      - get: ecr-((CONTAINER_IMAGE))
+        trigger: true
+        tags: [spring]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-stage
+      privileged: true
+      tags: [spring]
+      image: Nomad Deploy
+      file: resource-devops.ci/tasks/deploy_nomad_jobs.yml
+      input_mapping: {source_code: STAGE}
+      params:
+        ENV: stage
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ENV_AWS_SECRET_ACCESS_KEY: ((STAGE_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((STAGE_AWS_ACCESS_KEY_ID))
+        TERRAFORM_ENV: staging
+
+- name: Deploy container to Training
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: Nomad Deploy
+        tags: [spring]
+      - get: STAGE
+        tags: [spring]
+      - get: nomad_alert
+        tags: [spring]
+      - get: ecr-((CONTAINER_IMAGE))
+        tags: [spring]
+        trigger: true
+        passed: [Deploy container to Stage]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-train
+      privileged: true
+      tags: [spring]
+      image: Nomad Deploy
+      file: resource-devops.ci/tasks/deploy_nomad_jobs.yml
+      input_mapping: {source_code: STAGE}
+      params:
+        ENV: train
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ENV_AWS_SECRET_ACCESS_KEY: ((TRAIN_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((TRAIN_AWS_ACCESS_KEY_ID))
+        TERRAFORM_ENV: training
+
+- name: Deploy container to PreProd
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: Nomad Deploy
+        tags: [spring]
+      - get: MASTER
+        tags: [spring]
+      - get: nomad_alert
+        tags: [spring]
+      - get: ecr-((CONTAINER_IMAGE))
+        trigger: true
+        tags: [spring]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-prep
+      privileged: true
+      tags: [spring]
+      image: Nomad Deploy
+      file: resource-devops.ci/tasks/deploy_nomad_jobs.yml
+      input_mapping: {source_code: MASTER}
+      params:
+        ENV: prep
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ENV_AWS_SECRET_ACCESS_KEY: ((PREP_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((PREP_AWS_ACCESS_KEY_ID))
+        TERRAFORM_ENV: preprod
+
+- name: Deploy container to Production
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: Nomad Deploy
+        tags: [spring]
+      - get: MASTER
+        tags: [spring]
+      - get: nomad_alert
+        tags: [spring]
+      - get: ecr-((CONTAINER_IMAGE))
+        tags: [spring]
+        passed: [Deploy container to PreProd]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-production
+      privileged: true
+      tags: [spring]
+      image: Nomad Deploy
+      file: resource-devops.ci/tasks/deploy_nomad_jobs.yml
+      input_mapping: {source_code: MASTER}
+      params:
+        ENV: prod
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ENV_AWS_SECRET_ACCESS_KEY: ((PROD_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((PROD_AWS_ACCESS_KEY_ID))
+        TERRAFORM_ENV: prod
+
+
+
+- name: Pull request
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [spring]
+      - get: resource-build-java
+        tags: [spring]
+      - get: pullrequest
+        trigger: true
+        tags: [spring]
+    - task: build-java-nomad-artifact-pull-request
+      privileged: true
+      tags: [spring]
+      image: resource-build-java
+      params:
+        ARTIFACTORYPASSWORD: ((ARTIFACTORYPASSWORD))
+        REPOSITORY_NAME: ((CONTAINER_IMAGE))
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        TYPE: ((BUILD_TYPE))
+        LOGLEVEL: ((LOGLEVEL))
+        SKIP_TEST: ((SKIP_TEST))
+      file: resource-devops.ci/tasks/task_build_test_store.yml
+      input_mapping: {DEV: pullrequest}

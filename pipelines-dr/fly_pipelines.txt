@@ -1,0 +1,29 @@
+###############
+# REPO BUILDs #
+###############
+
+
+fly -t devops set-pipeline -p devops.infra.module -c repo_builds/pipeline.yml -l repo_builds/devops.infra.modules/params.yml
+fly -t devops set-pipeline -p devops.ci -c repo_builds/pipeline.yml -l repo_builds/devops.ci/params.yml
+
+
+
+##### pipeline to build pipelines #####
+fly -t keyspring set-pipeline -p devops.pipeline-builds -c run_fly.yml
+
+
+
+#### TESTING HELLO WORLD BUILDS AND DEPLOYS ####
+fly -t keyspring set-pipeline -p hello-world-service -c service_build_deploy/pipeline.yml -l service_build_deploy/hello-world-service/params.yml
+fly -t keyspring set-pipeline -p helloworld.portal -c node_build_deploy/pipeline.yml -l node_build_deploy/helloworld.portal/params.yml
+fly -t keyspring set-pipeline -p hello-world-data-dog -c service_build_deploy/pipeline.yml -l service_build_deploy/hello-world-data-dog/params.yml
+fly -t keyspring set-pipeline -p hello-world-new-proxy -c mule_build_deploy/pipeline.yml -l mule_build_deploy/hello-world-new-proxy/params.yml
+fly -t keyspring set-pipeline -p hello-world-talend -c talend_build_deploy/pipeline.yml -l talend_build_deploy/hello-world-talend/params.yml
+fly -t keyspring set-pipeline -p hello-world-clover -c clover_deploy/pipeline.yml -l clover_deploy/hello-world-clover/params.yml
+fly -t keyspring set-pipeline -p hello-world-proxy -c proxy_build_deploy/pipeline.yml -l proxy_build_deploy/helloworld.proxy/params.yml
+fly -t keyspring set-pipeline -p hello-world-job -c java_container_job_builds/pipeline.yml -l java_container_job_builds/hello-world-job/params.yml
+fly -t keyspring set-pipeline -p architecture -c tools_build_deploy/pipeline.yml -l tools_build_deploy/architecture/params.yml
+fly -t keyspring set-pipeline -p hello-world-multi-tenant-postrgres -c postgres_db_deploys/pipeline.yml -l postgres_db_deploys/hello-world-multi-tenant-postrgres/params.yml
+fly -t keyspring set-pipeline -p authorizer_lambda_function -c lambda_deploy/pipeline.yml -l lambda_deploy/authorizer_lambda_function/params.yml
+fly -t keyspring set-pipeline -p alfresco_sdk -c alfresco_build_deploy/pipeline.yml -l alfresco_build_deploy/alfresco-sdk/params.yml
+fly -t keyspring set-pipeline -p helloworld.lib -c java_lib_builds/pipeline.yml -l java_lib_builds/helloworld.lib/params.yml

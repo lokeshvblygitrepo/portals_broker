@@ -1,0 +1,6 @@
+PROJECT: devops.infra.helloworld-lambda
+CI_VERSION: 2.0.181
+TERRAFORM_PROJECT: helloworld-lambda
+TEAM_CHANNEL: helloworld
+BUILD_TYPE: PYTHON
+PIP_PATH: ''

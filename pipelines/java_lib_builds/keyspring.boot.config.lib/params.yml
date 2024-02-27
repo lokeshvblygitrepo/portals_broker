@@ -1,0 +1,7 @@
+CI_VERSION : 2.0.104
+PROJECT: keyspring-boot-configuration.lib
+BUILD_TYPE: JAVA_LIB
+LOGLEVEL: INFO
+TEAM_CHANNEL: core-ci
+MAVEN_BUILD_VERSION: 1.0.0
+BUILD_CONTAINER: concourseci-build-java17

@@ -1,0 +1,17 @@
+CI_VERSION :          2.0.128
+TEAM_CHANNEL:         core_ci
+PROJECT:              melissa-data
+TERRAFORM_PROJECT:    melissa-data
+CONTAINER_IMAGE:      melissa-data
+# SERVICE_NAME:         ecs_service
+# BUILD_TYPE:           NGINX
+# SKIP_TEST:            true
+# LOGLEVEL:             ERROR
+DEPLOY:               terraform_pipeline
+# DEPLOY:               terraform_ecs_deploy
+# DEPLOY_DEV:           terraform_ecs_deploy
+# DEPLOY_QA:            terraform_ecs_deploy
+# DEPLOY_STAGE:         terraform_ecs_deploy
+# DEPLOY_TRAIN:         terraform_ecs_deploy
+# DEPLOY_PREP:          terraform_ecs_deploy
+# DEPLOY_PROD:          terraform_ecs_deploy

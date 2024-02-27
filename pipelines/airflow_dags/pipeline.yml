@@ -1,0 +1,289 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+
+- name: resource-devops.ci
+  type: git
+  check_timeout: 5m
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: kube
+  type: git
+  check_timeout: 5m
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.infra.kube.git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: dev
+  type: git
+  check_timeout: 5m
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: develop
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: qa
+  type: git
+  check_timeout: 5m
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: qa
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: stage
+  type: git
+  check_timeout: 5m
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: stage
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: master
+  type: git
+  check_timeout: 5m
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: terraformdeploy
+  type: docker-image
+  check_timeout: 10m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourseci-deploy
+    tag: 0.13.3
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+groups:
+- name: development
+  jobs:
+  - deploy_dev
+
+- name: qa
+  jobs:
+  - deploy_qa
+
+- name: stage
+  jobs:
+  - deploy_stage
+  - deploy_train
+
+- name: production
+  jobs:
+  - deploy_prep
+  - deploy_prod
+
+
+jobs:
+
+- name: deploy_dev
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: terraformdeploy
+      - get: dev
+        trigger: true
+      - get: kube
+    - task: deploy_dags_dev
+      privileged: true
+      image: terraformdeploy
+      file: resource-devops.ci/tasks/deploy_dags.yml
+      input_mapping: {source_code: dev}
+      params:
+        ENV: dev
+        ENV_LOWER: dev
+        WORKSPACE: development
+        SECRET_ACCESS_KEY: ((DEV_AWS_SECRET_ACCESS_KEY))
+        ACCESS_KEY_ID: ((DEV_AWS_ACCESS_KEY_ID))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: deploy_qa
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: terraformdeploy
+      - get: qa
+        trigger: true
+      - get: kube
+    - task: deploy_dags_qa
+      privileged: true
+      image: terraformdeploy
+      file: resource-devops.ci/tasks/deploy_dags.yml
+      input_mapping: {source_code: qa}
+      params:
+        ENV: QA
+        ENV_LOWER: qa
+        WORKSPACE: qa
+        SECRET_ACCESS_KEY: ((QA_AWS_SECRET_ACCESS_KEY))
+        ACCESS_KEY_ID: ((QA_AWS_ACCESS_KEY_ID))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: deploy_stage
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: terraformdeploy
+      - get: stage
+        trigger: true
+      - get: kube
+    - task: deploy_dags_stage
+      privileged: true
+      image: terraformdeploy
+      file: resource-devops.ci/tasks/deploy_dags.yml
+      input_mapping: {source_code: stage}
+      params:
+        ENV: STAGE
+        ENV_LOWER: stage
+        WORKSPACE: staging
+        SECRET_ACCESS_KEY: ((STAGE_AWS_SECRET_ACCESS_KEY))
+        ACCESS_KEY_ID: ((STAGE_AWS_ACCESS_KEY_ID))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+
+- name: deploy_train
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: terraformdeploy
+      - get: stage
+        trigger: true
+      - get: kube
+    - task: deploy_dags_train
+      privileged: true
+      image: terraformdeploy
+      file: resource-devops.ci/tasks/deploy_dags.yml
+      input_mapping: {source_code: stage}
+      params:
+        ENV: TRAIN
+        ENV_LOWER: train
+        WORKSPACE: training
+        SECRET_ACCESS_KEY: ((TRAIN_AWS_SECRET_ACCESS_KEY))
+        ACCESS_KEY_ID: ((TRAIN_AWS_ACCESS_KEY_ID))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: deploy_prep
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: terraformdeploy
+      - get: master
+        trigger: true
+      - get: kube
+    - task: deploy_dags_prep
+      privileged: true
+      image: terraformdeploy
+      file: resource-devops.ci/tasks/deploy_dags.yml
+      input_mapping: {source_code: master}
+      params:
+        ENV: PREP
+        ENV_LOWER: prep
+        WORKSPACE: preprod
+        SECRET_ACCESS_KEY: ((PREP_AWS_SECRET_ACCESS_KEY))
+        ACCESS_KEY_ID: ((PREP_AWS_ACCESS_KEY_ID))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: deploy_prod
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: terraformdeploy
+      - get: master
+        trigger: true
+        passed: [deploy_prep]
+      - get: kube
+    - task: deploy_dags_prod
+      privileged: true
+      image: terraformdeploy
+      file: resource-devops.ci/tasks/deploy_dags.yml
+      input_mapping: {source_code: master}
+      params:
+        ENV: PROD
+        ENV_LOWER: prod
+        WORKSPACE: prod
+        SECRET_ACCESS_KEY: ((PROD_AWS_SECRET_ACCESS_KEY))
+        ACCESS_KEY_ID: ((PROD_AWS_ACCESS_KEY_ID))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))

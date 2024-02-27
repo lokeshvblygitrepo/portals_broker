@@ -1,0 +1,3 @@
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.nginx.alpine
+CONTAINER_IMAGE: nginx-alpine

@@ -1,0 +1,18 @@
+TEAM_CHANNEL: underwriting_ci_cd
+CI_VERSION : 2.0.209
+PROJECT: translation.portal
+TERRAFORM_PROJECT: translation_portal
+CONTAINER_IMAGE: translation-portal
+SERVICE_NAME: node_service
+SKIP_TEST: true
+LOGLEVEL: ERROR
+BUILD_TYPE: NODE
+VERRACODE_APP: translation.portal
+VALIDATE_NGINX_CONFIGS: false
+DEPLOY: terraform_deploy_node_alb
+DEPLOY_DEV: terraform_deploy_node_alb
+DEPLOY_QA: terraform_deploy_node_alb
+DEPLOY_STAGE: terraform_deploy_node_alb
+DEPLOY_TRAIN: terraform_deploy_node_alb
+DEPLOY_PREP: terraform_deploy_node_alb
+DEPLOY_PROD: terraform_deploy_node_alb

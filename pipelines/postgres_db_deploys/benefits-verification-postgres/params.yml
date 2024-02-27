@@ -1,0 +1,13 @@
+CI_VERSION : 2.0.159
+PROJECT: benefits.verification.db
+BUILD_TYPE: POSTGRES
+LOGLEVEL: ERROR
+TEAM_CHANNEL: data
+LIQUIBASE_PORT: 5432
+LIQUIBASE_DATABASE: benefits_verification
+LIQUIBASE_USERNAME: corvesta
+LIQUIBASE_CHANGELOG: changelog.xml
+LIQUIBASE_LOGLEVEL: debug
+LIQUIBASE_CLASSPATH: /opt/jdbc/postgres-jdbc.jar
+LIQUIBASE_DRIVER: org.postgresql.Driver
+LIQUIBASE_DEBUG: unset

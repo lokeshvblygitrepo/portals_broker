@@ -1,0 +1,6 @@
+CI_VERSION : 2.0.104
+TEAM_CHANNEL: data
+PROJECT: tenant.ddks
+LIQUIBASE_PORT: 5432
+CLIENT: ddks
+LOGLEVEL: warning

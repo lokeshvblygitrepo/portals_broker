@@ -1,0 +1,250 @@
+---
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  check_every: 10m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+resources:
+
+- name: db_build
+  type: docker-image
+  check_every: 10m
+  check_timeout: 10m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourse-db-build
+    tag: 0.0.2
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: slack-alert
+  type: slack-notification
+  check_every: 10m
+  check_timeout: 10m  
+  source:
+    url: ((slack_channel))
+
+- name: resource-devops.ci
+  type: git
+  check_every: 10m
+  check_timeout: 10m
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: dev
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: develop
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: qa
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: qa
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: stage
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: stage
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: master
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+groups:
+- name: development
+  jobs:
+  - build_client_databases_dev
+
+- name: test
+  jobs:
+  - build_client_databases_qa
+
+- name: stage
+  jobs:
+  - build_client_databases_stage
+  - build_client_databases_train
+
+- name: production
+  jobs:
+  - build_client_databases_prep
+  - build_client_databases_prod
+
+jobs:
+
+- name: build_client_databases_dev
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: db_build
+      - get: dev
+        trigger: true
+    - task: resource-build-postgres-database
+      privileged: true
+      image: db_build
+      input_mapping: {CODE: dev}
+      params:
+        LIQUIBASE_USERNAME: corvesta
+        LIQUIBASE_PASSWORD: ((LIQUIBASE_DEV_PASSWORD))
+        LIQUIBASE_PORT: ((LIQUIBASE_PORT))
+        CLIENTS: ((DEV_CLIENTS))
+        ENV: dev
+      file: resource-devops.ci/tasks/build_client_databases.yml
+
+- name: build_client_databases_qa
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: db_build
+      - get: qa
+        trigger: true
+    - task: resource-build-postgres-database
+      privileged: true
+      image: db_build
+      input_mapping: {CODE: qa}
+      params:
+        LIQUIBASE_USERNAME: corvesta
+        LIQUIBASE_PASSWORD: ((QA_LIQUIBASE_PASSWORD))
+        LIQUIBASE_PORT: ((LIQUIBASE_PORT))
+        CLIENTS: ((QA_CLIENTS))
+        ENV: qa
+      file: resource-devops.ci/tasks/build_client_databases.yml
+
+
+- name: build_client_databases_stage
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: db_build
+      - get: stage
+        trigger: true
+    - task: resource-build-postgres-database
+      privileged: true
+      image: db_build
+      input_mapping: {CODE: stage}
+      params:
+        LIQUIBASE_USERNAME: corvesta
+        LIQUIBASE_PASSWORD: ((STAGE_LIQUIBASE_PASSWORD))
+        LIQUIBASE_PORT: ((LIQUIBASE_PORT))
+        CLIENTS: ((STAGE_CLIENTS))
+        ENV: stage
+      file: resource-devops.ci/tasks/build_client_databases.yml
+
+- name: build_client_databases_train
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: db_build
+      - get: stage
+        trigger: true
+        passed: [build_client_databases_stage]
+    - task: resource-build-postgres-database
+      privileged: true
+      image: db_build
+      input_mapping: {CODE: stage}
+      params:
+        LIQUIBASE_USERNAME: corvesta
+        LIQUIBASE_PASSWORD: ((TRAIN_LIQUIBASE_PASSWORD))
+        LIQUIBASE_PORT: ((LIQUIBASE_PORT))
+        CLIENTS: ((TRAIN_CLIENTS))
+        ENV: train
+      file: resource-devops.ci/tasks/build_client_databases.yml
+
+- name: build_client_databases_prep
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: db_build
+      - get: master
+        trigger: true
+    - task: resource-build-postgres-database
+      privileged: true
+      image: db_build
+      input_mapping: {CODE: master}
+      params:
+        LIQUIBASE_USERNAME: corvesta
+        LIQUIBASE_PASSWORD: ((PREP_LIQUIBASE_PASSWORD))
+        LIQUIBASE_PORT: ((LIQUIBASE_PORT))
+        CLIENTS: ((PREP_CLIENTS))
+        ENV: prep
+      file: resource-devops.ci/tasks/build_client_databases.yml
+
+
+- name: build_client_databases_prod
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: db_build
+      - get: master
+        passed: [build_client_databases_prep]
+    - task: resource-build-postgres-database
+      privileged: true
+      image: db_build
+      input_mapping: {CODE: master}
+      params:
+        LIQUIBASE_USERNAME: corvesta
+        LIQUIBASE_PASSWORD: ((PROD_LIQUIBASE_PASSWORD))
+        LIQUIBASE_PORT: ((LIQUIBASE_PORT))
+        CLIENTS: ((PROD_CLIENTS))
+        ENV: prod
+      file: resource-devops.ci/tasks/build_client_databases.yml

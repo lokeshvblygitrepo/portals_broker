@@ -1,0 +1,8 @@
+CI_VERSION: 2.0.181
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.sonarqube
+TERRAFORM_PROJECT: devops-sonarqube
+CONTAINER_IMAGE: wrapped_sonar
+CONTAINER_VERSION: latest
+SERVICE_NAME: devops-sonarqube
+DEPLOY: task_mgmt_container_only_deploy

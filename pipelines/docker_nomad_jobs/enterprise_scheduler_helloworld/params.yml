@@ -1,0 +1,6 @@
+CI_VERSION : 2.0.104
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.enterprise_scheduler-helloworld
+CONTAINER_IMAGE: nomad-enterprise-scheduler-helloworld
+BUILD_TYPE: NOMAD_JOB
+CONTAINER_TAGS: nomad

@@ -1,0 +1,6 @@
+CI_VERSION : 2.0.104
+TEAM_CHANNEL: data
+PROJECT: tenant.ddva
+LIQUIBASE_PORT: 5432
+CLIENT: ddva
+LOGLEVEL: warning

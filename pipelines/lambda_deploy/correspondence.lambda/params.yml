@@ -1,0 +1,6 @@
+PROJECT: correspondence.lambda
+CI_VERSION: 2.0.181
+TERRAFORM_PROJECT: correspondence.lambda
+TEAM_CHANNEL: correspondence-dev
+BUILD_TYPE: JAVA
+PIP_PATH: ''

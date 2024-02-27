@@ -1,0 +1,607 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":neckbeard:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: git-bitbucket-pr
+  type: docker-image
+  source:
+    repository: zarplata/concourse-git-bitbucket-pr-resource
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+
+# - name: git-commit
+#   type: s3
+#   source:
+#     bucket: cv-service-git-commit
+#     private: true
+#     region_name: ((REGION))
+#     content_type: text/html
+#     versioned_file: ((CONTAINER_IMAGE))/commit.txt
+#     access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+#     secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+
+- name: resource-devops.ci
+  type: git
+  check_timeout: 5m
+  check_every: 5m
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: DEV
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT)).git
+    branch: develop
+    private_key: ((bitbucket-ssh))
+
+- name: QA
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT)).git
+    branch: qa
+    private_key: ((bitbucket-ssh))
+
+- name: STAGE
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT)).git
+    branch: stage
+    private_key: ((bitbucket-ssh))
+
+- name: TRAIN
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT)).git
+    branch: train
+    private_key: ((bitbucket-ssh))
+
+- name: PREP
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT)).git
+    branch: prep
+    private_key: ((bitbucket-ssh))
+
+- name: MASTER
+  type: git
+  check_timeout: 5m
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT)).git
+    branch: master
+    private_key: ((bitbucket-ssh))
+
+
+
+- name: resource-build-node
+  type: docker-image
+  check_timeout: 5m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourseci-build-java
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+    tag: 1.0.1
+
+- name: Terraform Deploy
+  type: docker-image
+  check_timeout: 5m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourseci-deploy
+    tag: 0.13.3
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: ecr-((CONTAINER_IMAGE))
+  type: docker-image
+  check_timeout: 5m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/((CONTAINER_IMAGE))
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+groups:
+- name: development
+  jobs:
+  - dev_build_((PROJECT))_container
+  - Deploy_((TERRAFORM_PROJECT))_container_DEV
+
+- name: qa
+  jobs:
+  - qa_build_((PROJECT))_container
+  - Deploy_((TERRAFORM_PROJECT))_container_QA
+
+- name: stage
+  jobs:
+  - stage_build_((PROJECT))_container
+  - Deploy_((TERRAFORM_PROJECT))_container_STAGE
+
+- name: train
+  jobs:
+  - train_build_((PROJECT))_container
+  - Deploy_((TERRAFORM_PROJECT))_container_TRAIN
+
+- name: prep
+  jobs:
+  - prep_build_((PROJECT))_container
+  - Deploy_((TERRAFORM_PROJECT))_container_PREP
+
+- name: production
+  jobs:
+  - production_build_((PROJECT))_container
+  - Deploy_((TERRAFORM_PROJECT))_container_PRODUCTION
+
+
+jobs:
+- name: dev_build_((PROJECT))_container
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: resource-build-node
+      - get: DEV
+        trigger: true
+    - try:
+        task: build-node-artifact
+        privileged: true
+        image: resource-build-node
+        file: resource-devops.ci/tasks/task_build_docker_hotfix.yml
+        input_mapping: {CODE: DEV}
+        params:
+          TERRAFORM_ENV: development
+          TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+          CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+          TERRAFORM_VERSION: 0.13.3
+          SERVICE_NAME: ((SERVICE_NAME))
+          MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+          MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+          ENV_AWS_SECRET_ACCESS_KEY: ((DEV_AWS_SECRET_ACCESS_KEY))
+          ENV_AWS_ACCESS_KEY_ID: ((DEV_AWS_ACCESS_KEY_ID))
+          GIT_USERNAME: ((bitbucket-username))
+          GIT_PASSWORD: ((bitbucket-apppassword))
+          VAULT_TOKEN: ((VAULT_TOKEN))
+      on_success:
+        do:
+          - put: ecr-((CONTAINER_IMAGE))
+            params:
+              build: code_build
+              input: code_build
+              tag: code_build/commit.txt
+            get_params: { skip_download: true }
+
+
+- name: Deploy_((TERRAFORM_PROJECT))_container_DEV
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: DEV
+        trigger: true
+        passed: [dev_build_((PROJECT))_container]
+        params:
+          get_params: { skip_download: true }
+      - get: ecr-((CONTAINER_IMAGE))
+        params:
+          get_params: { skip_download: true }
+      - get: resource-devops.ci
+      - get: Terraform Deploy
+    - task: terraform-deploy
+      privileged: true
+      image: Terraform Deploy
+      file: resource-devops.ci/tasks/((DEPLOY)).yml
+      input_mapping: {CODE: DEV}
+      params:
+        TERRAFORM_ENV: development
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: 0.13.3
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((DEV_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((DEV_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: qa_build_((PROJECT))_container
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+  - in_parallel:
+    - get: resource-devops.ci
+    - get: resource-build-node
+    - get: QA
+      trigger: true
+  - task: build-node-artifact
+    privileged: true
+    image: resource-build-node
+    file: resource-devops.ci/tasks/task_build_docker_hotfix.yml
+    input_mapping: {CODE: QA}
+    params:
+      TERRAFORM_ENV: qa
+      TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+      CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+      TERRAFORM_VERSION: 0.13.3
+      SERVICE_NAME: ((SERVICE_NAME))
+      MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+      ENV_AWS_SECRET_ACCESS_KEY: ((QA_AWS_SECRET_ACCESS_KEY))
+      ENV_AWS_ACCESS_KEY_ID: ((QA_AWS_ACCESS_KEY_ID))
+      GIT_USERNAME: ((bitbucket-username))
+      GIT_PASSWORD: ((bitbucket-apppassword))
+      VAULT_TOKEN: ((VAULT_TOKEN))
+    on_success:
+      do:
+        - put: ecr-((CONTAINER_IMAGE))
+          params:
+            build: code_build
+            build_args:
+              GIT_USERNAME: ((bitbucket-username))
+              GIT_PASSWORD: ((bitbucket-apppassword))
+            input: code_build
+            tag: code_build/commit.txt
+          get_params: { skip_download: true }
+
+- name: Deploy_((TERRAFORM_PROJECT))_container_QA
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: QA
+        trigger: true
+        passed: [qa_build_((PROJECT))_container]
+        params:
+          get_params: { skip_download: true }
+      - get: ecr-((CONTAINER_IMAGE))
+        params:
+          get_params: { skip_download: true }
+      - get: resource-devops.ci
+      - get: Terraform Deploy
+    - task: terraform-deploy
+      privileged: true
+      image: Terraform Deploy
+      file: resource-devops.ci/tasks/((DEPLOY)).yml
+      input_mapping: {CODE: QA}
+      params:
+        TERRAFORM_ENV: qa
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: 0.13.3
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((QA_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((QA_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: stage_build_((PROJECT))_container
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+  - in_parallel:
+    - get: resource-devops.ci
+    - get: resource-build-node
+    - get: STAGE
+      trigger: true
+  - task: build-node-artifact
+    privileged: true
+    image: resource-build-node
+    file: resource-devops.ci/tasks/task_build_docker_hotfix.yml
+    input_mapping: {CODE: STAGE}
+    params:
+      TERRAFORM_ENV: staging
+      TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+      CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+      TERRAFORM_VERSION: 0.13.3
+      SERVICE_NAME: ((SERVICE_NAME))
+      MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+      ENV_AWS_SECRET_ACCESS_KEY: ((STAGE_AWS_SECRET_ACCESS_KEY))
+      ENV_AWS_ACCESS_KEY_ID: ((STAGE_AWS_ACCESS_KEY_ID))
+      GIT_USERNAME: ((bitbucket-username))
+      GIT_PASSWORD: ((bitbucket-apppassword))
+      VAULT_TOKEN: ((VAULT_TOKEN))
+    on_success:
+      do:
+        - put: ecr-((CONTAINER_IMAGE))
+          params:
+            build: code_build
+            input: code_build
+            tag: code_build/commit.txt
+          get_params: { skip_download: true }
+
+- name: Deploy_((TERRAFORM_PROJECT))_container_STAGE
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: STAGE
+        passed: [stage_build_((PROJECT))_container]
+        trigger: true
+        params:
+          get_params: { skip_download: true }
+      - get: ecr-((CONTAINER_IMAGE))
+        params:
+          get_params: { skip_download: true }
+      - get: resource-devops.ci
+      - get: Terraform Deploy
+    - task: terraform-deploy
+      privileged: true
+      image: Terraform Deploy
+      file: resource-devops.ci/tasks/((DEPLOY)).yml
+      input_mapping: {CODE: STAGE}
+      params:
+        TERRAFORM_ENV: staging
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: 0.13.3
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((STAGE_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((STAGE_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: train_build_((PROJECT))_container
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+  - in_parallel:
+    - get: resource-devops.ci
+    - get: resource-build-node
+    - get: TRAIN
+      trigger: true
+  - task: build-node-artifact
+    privileged: true
+    image: resource-build-node
+    file: resource-devops.ci/tasks/task_build_docker_hotfix.yml
+    input_mapping: {CODE: TRAIN}
+    params:
+      TERRAFORM_ENV: training
+      TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+      CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+      TERRAFORM_VERSION: 0.13.3
+      SERVICE_NAME: ((SERVICE_NAME))
+      MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+      ENV_AWS_SECRET_ACCESS_KEY: ((TRAIN_AWS_SECRET_ACCESS_KEY))
+      ENV_AWS_ACCESS_KEY_ID: ((TRAIN_AWS_ACCESS_KEY_ID))
+      GIT_USERNAME: ((bitbucket-username))
+      GIT_PASSWORD: ((bitbucket-apppassword))
+      VAULT_TOKEN: ((VAULT_TOKEN))
+    on_success:
+      do:
+        - put: ecr-((CONTAINER_IMAGE))
+          params:
+            build: code_build
+            input: code_build
+            tag: code_build/commit.txt
+          get_params: { skip_download: true }
+
+- name: Deploy_((TERRAFORM_PROJECT))_container_TRAIN
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: TRAIN
+        passed: [train_build_((PROJECT))_container]
+        trigger: true
+        params:
+          get_params: { skip_download: true }
+      - get: ecr-((CONTAINER_IMAGE))
+        params:
+          get_params: { skip_download: true }
+      - get: resource-devops.ci
+      - get: Terraform Deploy
+    - task: terraform-deploy
+      privileged: true
+      image: Terraform Deploy
+      file: resource-devops.ci/tasks/((DEPLOY)).yml
+      input_mapping: {CODE: TRAIN}
+      params:
+        TERRAFORM_ENV: training
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: 0.13.3
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((TRAIN_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((TRAIN_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+- name: prep_build_((PROJECT))_container
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+  - in_parallel:
+    - get: resource-devops.ci
+    - get: resource-build-node
+    - get: PREP
+      trigger: true
+  - task: build-node-artifact
+    privileged: true
+    image: resource-build-node
+    file: resource-devops.ci/tasks/task_build_docker_hotfix.yml
+    input_mapping: {CODE: PREP}
+    params:
+      TERRAFORM_ENV: preprod
+      TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+      CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+      TERRAFORM_VERSION: 0.13.3
+      SERVICE_NAME: ((SERVICE_NAME))
+      MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+      ENV_AWS_SECRET_ACCESS_KEY: ((PREP_AWS_SECRET_ACCESS_KEY))
+      ENV_AWS_ACCESS_KEY_ID: ((PREP_AWS_ACCESS_KEY_ID))
+      GIT_USERNAME: ((bitbucket-username))
+      GIT_PASSWORD: ((bitbucket-apppassword))
+      VAULT_TOKEN: ((VAULT_TOKEN))
+    on_success:
+      do:
+        - put: ecr-((CONTAINER_IMAGE))
+          params:
+            build: code_build
+            input: code_build
+            tag: code_build/commit.txt
+          get_params: { skip_download: true }
+
+- name: Deploy_((TERRAFORM_PROJECT))_container_PREP
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: PREP
+        passed: [prep_build_((PROJECT))_container]
+        trigger: true
+        params:
+          get_params: { skip_download: true }
+      - get: ecr-((CONTAINER_IMAGE))
+        params:
+          get_params: { skip_download: true }
+      - get: resource-devops.ci
+      - get: Terraform Deploy
+    - task: terraform-deploy
+      privileged: true
+      image: Terraform Deploy
+      file: resource-devops.ci/tasks/((DEPLOY)).yml
+      input_mapping: {CODE: PREP}
+      params:
+        TERRAFORM_ENV: preprod
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: 0.13.3
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((PREP_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((PREP_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+
+
+- name: production_build_((PROJECT))_container
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+  - in_parallel:
+    - get: resource-devops.ci
+    - get: resource-build-node
+    - get: MASTER
+      trigger: true
+  - task: build-node-artifact
+    privileged: true
+    image: resource-build-node
+    file: resource-devops.ci/tasks/task_build_docker_hotfix.yml
+    input_mapping: {CODE: MASTER}
+    params:
+      TERRAFORM_ENV: prod
+      TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+      CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+      TERRAFORM_VERSION: 0.13.3
+      SERVICE_NAME: ((SERVICE_NAME))
+      MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+      MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+      ENV_AWS_SECRET_ACCESS_KEY: ((PROD_AWS_SECRET_ACCESS_KEY))
+      ENV_AWS_ACCESS_KEY_ID: ((PROD_AWS_ACCESS_KEY_ID))
+      GIT_USERNAME: ((bitbucket-username))
+      GIT_PASSWORD: ((bitbucket-apppassword))
+      VAULT_TOKEN: ((VAULT_TOKEN))
+    on_success:
+      do:
+        - put: ecr-((CONTAINER_IMAGE))
+          params:
+            build: code_build
+            input: code_build
+            tag: code_build/commit.txt
+          get_params: { skip_download: true }
+
+- name: Deploy_((TERRAFORM_PROJECT))_container_PRODUCTION
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: MASTER
+        passed: [production_build_((PROJECT))_container]
+        trigger: true
+        params:
+          get_params: { skip_download: true }
+      - get: ecr-((CONTAINER_IMAGE))
+        params:
+          get_params: { skip_download: true }
+      - get: resource-devops.ci
+      - get: Terraform Deploy
+    - task: terraform-deploy
+      privileged: true
+      image: Terraform Deploy
+      file: resource-devops.ci/tasks/((DEPLOY)).yml
+      input_mapping: {CODE: MASTER}
+      params:
+        TERRAFORM_ENV: prod
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: 0.13.3
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((PROD_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((PROD_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))

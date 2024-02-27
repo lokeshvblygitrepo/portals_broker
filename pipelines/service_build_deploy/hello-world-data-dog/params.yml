@@ -1,0 +1,25 @@
+CI_VERSION: 2.0.196
+TEAM_CHANNEL: helloworld
+PROJECT: helloworld.datadog
+TERRAFORM_PROJECT: hello_world_data_dog
+CONTAINER_IMAGE: hello-world-data-dog
+SERVICE_NAME: ecs_service
+BUILD_TYPE: JAVA
+SKIP_TEST: true
+LOGLEVEL: ERROR
+CONTAINER_TAGS: datadog helloworld
+DEPLOY: terraform_ecs_deploy
+DEPLOY_DEV: terraform_ecs_deploy
+DEPLOY_QA: terraform_ecs_deploy
+DEPLOY_STAGE: terraform_ecs_deploy
+DEPLOY_TRAIN: terraform_ecs_deploy
+DEPLOY_PREP: terraform_ecs_deploy
+DEPLOY_PROD: terraform_ecs_deploy
+MAVEN_BUILD_VERSION_DEV: 1.0.1
+MAVEN_BUILD_VERSION_QA: 1.0.1
+MAVEN_BUILD_VERSION_STAGE: 1.0.1
+MAVEN_BUILD_VERSION_MASTER: 1.0.1
+BUILD_CONTAINER_DEV: concourseci-build-java
+BUILD_CONTAINER_QA: concourseci-build-java
+BUILD_CONTAINER_STAGE: concourseci-build-java
+BUILD_CONTAINER_MASTER: concourseci-build-java

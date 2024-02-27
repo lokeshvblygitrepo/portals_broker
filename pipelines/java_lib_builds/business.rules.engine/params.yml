@@ -1,0 +1,7 @@
+CI_VERSION : 2.0.104
+PROJECT: business.rules.engine
+BUILD_TYPE: JAVA_LIB
+LOGLEVEL: INFO
+TEAM_CHANNEL: billingnfinance
+MAVEN_BUILD_VERSION: 1.0.0
+BUILD_CONTAINER: concourseci-build-java17

@@ -1,0 +1,4 @@
+CI_VERSION : 2.0.104
+TEAM_CHANNEL: devops-cicd
+PROJECT: data.architecture
+LIQUIBASE_PORT: 5432

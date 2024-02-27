@@ -1,0 +1,19 @@
+CI_VERSION : 2.0.207
+TEAM_CHANNEL: crtkeyspringdeploy
+PROJECT: ksedw.ci.load_all_dims
+TERRAFORM_PROJECT: ksedw_load_all_dims
+CONTAINER_IMAGE: ksedw_load_all_dims
+SERVICE_NAME: talend_service
+BUILD_TYPE: TALEND
+MAVEN_BUILD_VERSION: 1.0.1
+SKIP_TEST: true
+LOGLEVEL: ERROR
+FILTER: load_all_dims
+MASTER_REPO: ksedw.talend
+CONTAINER_TAGS: nomad
+#DEPLOY_DEV:   deploy_nomad_jobs
+#DEPLOY_QA:    deploy_nomad_jobs
+#DEPLOY_STAGE: deploy_nomad_jobs
+#DEPLOY_TRAIN: deploy_nomad_jobs
+#DEPLOY_PREP:  deploy_nomad_jobs
+#DEPLOY_PROD:  deploy_nomad_jobs

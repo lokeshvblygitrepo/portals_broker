@@ -1,0 +1,4 @@
+PROJECT: data-encara-lambda
+CI_VERSION: 2.0.114
+TERRAFORM_PROJECT: data-encara
+TEAM_CHANNEL: notice

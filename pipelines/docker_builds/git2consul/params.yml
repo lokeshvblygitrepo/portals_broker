@@ -1,0 +1,3 @@
+TEAM_CHANNEL: devops-cicd
+PROJECT: third.party.git2consul-go
+CONTAINER_IMAGE: git2consul

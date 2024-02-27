@@ -1,0 +1,310 @@
+---
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  check_every: 10m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+resources:
+
+- name: liquibase
+  type: docker-image
+  check_every: 10m
+  check_timeout: 10m
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/liquibase
+    tag: 3.8.5
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+
+- name: resource-devops.ci
+  type: git
+  check_every: 10m
+  check_timeout: 10m
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: resource-data.architecture
+  type: git
+  check_every: 10m
+  check_timeout: 10m
+  source:
+    uri: https://bitbucket.org/corvesta/data.architecture.git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: dev
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: develop
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: qa
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: qa
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: stage
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: stage
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: master
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+groups:
+- name: development
+  jobs:
+  - deploy_dev_((PROJECT))_postgres_db
+
+- name: test
+  jobs:
+  - deploy_qa_((PROJECT))_postgres_db
+
+- name: stage
+  jobs:
+  - deploy_stage_((PROJECT))_postgres_db
+  - deploy_train_((PROJECT))_postgres_db
+
+- name: production
+  jobs:
+  - deploy_prep_((PROJECT))_postgres_db
+  - deploy_production_((PROJECT))_postgres_db
+
+jobs:
+- name: deploy_dev_((PROJECT))_postgres_db
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: liquibase
+      - get: resource-data.architecture
+      - get: dev
+        trigger: true
+    - task: resource-build-postgres-database
+      privileged: true
+      image: liquibase
+      params:
+        LOGLEVEL: ((LOGLEVEL))
+        GITREPONAME: ((PROJECT))
+        TYPE: ((BUILD_TYPE))
+        LIQUIBASE_PORT: ((LIQUIBASE_PORT))
+        LIQUIBASE_DATABASE: ((LIQUIBASE_DATABASE))
+        LIQUIBASE_USERNAME: ((LIQUIBASE_USERNAME))
+        LIQUIBASE_PASSWORD: ((LIQUIBASE_PASSWORD))
+        LIQUIBASE_CHANGELOG: ((LIQUIBASE_CHANGELOG))
+        LIQUIBASE_LOGLEVEL: ((LIQUIBASE_LOGLEVEL))
+        LIQUIBASE_CLASSPATH: ((LIQUIBASE_CLASSPATH))
+        LIQUIBASE_DRIVER: ((LIQUIBASE_DRIVER))
+        CLIENTS: ((DEV_CLIENTS))
+        ENV: dev
+      file: resource-devops.ci/tasks/deploy_postgres_db.yml
+      input_mapping: {CODE: dev}
+
+
+- name: deploy_qa_((PROJECT))_postgres_db
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: liquibase
+      - get: resource-data.architecture
+      - get: qa
+        trigger: true
+    - task: resource-build-postgres-database
+      privileged: true
+      image: liquibase
+      params:
+        LOGLEVEL: ((LOGLEVEL))
+        GITREPONAME: ((PROJECT))
+        TYPE: ((BUILD_TYPE))
+        LIQUIBASE_PORT: ((LIQUIBASE_PORT))
+        LIQUIBASE_DATABASE: ((LIQUIBASE_DATABASE))
+        LIQUIBASE_USERNAME: ((LIQUIBASE_USERNAME))
+        LIQUIBASE_PASSWORD: ((QA_LIQUIBASE_PASSWORD))
+        LIQUIBASE_CHANGELOG: ((LIQUIBASE_CHANGELOG))
+        LIQUIBASE_LOGLEVEL: ((LIQUIBASE_LOGLEVEL))
+        LIQUIBASE_CLASSPATH: ((LIQUIBASE_CLASSPATH))
+        LIQUIBASE_DRIVER: ((LIQUIBASE_DRIVER))
+        CLIENTS: ((QA_CLIENTS))
+        ENV: qa
+      file: resource-devops.ci/tasks/deploy_postgres_db.yml
+      input_mapping: {CODE: qa}
+
+- name: deploy_stage_((PROJECT))_postgres_db
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: liquibase
+      - get: resource-data.architecture
+      - get: stage
+        trigger: true
+    - task: resource-build-postgres-database
+      privileged: true
+      image: liquibase
+      params:
+        LOGLEVEL: ((LOGLEVEL))
+        GITREPONAME: ((PROJECT))
+        TYPE: ((BUILD_TYPE))
+        LIQUIBASE_PORT: ((LIQUIBASE_PORT))
+        LIQUIBASE_DATABASE: ((LIQUIBASE_DATABASE))
+        LIQUIBASE_USERNAME: ((LIQUIBASE_USERNAME))
+        LIQUIBASE_PASSWORD: ((STAGE_LIQUIBASE_PASSWORD))
+        LIQUIBASE_CHANGELOG: ((LIQUIBASE_CHANGELOG))
+        LIQUIBASE_LOGLEVEL: ((LIQUIBASE_LOGLEVEL))
+        LIQUIBASE_CLASSPATH: ((LIQUIBASE_CLASSPATH))
+        LIQUIBASE_DRIVER: ((LIQUIBASE_DRIVER))
+        CLIENTS: ((STAGE_CLIENTS))
+        ENV: stage
+      file: resource-devops.ci/tasks/deploy_postgres_db.yml
+      input_mapping: {CODE: stage}
+
+- name: deploy_train_((PROJECT))_postgres_db
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: liquibase
+      - get: resource-data.architecture
+      - get: stage
+        trigger: true
+        passed: [deploy_stage_((PROJECT))_postgres_db]
+    - task: resource-build-postgres-database
+      privileged: true
+      image: liquibase
+      params:
+        LOGLEVEL: ((LOGLEVEL))
+        GITREPONAME: ((PROJECT))
+        TYPE: ((BUILD_TYPE))
+        LIQUIBASE_PORT: ((LIQUIBASE_PORT))
+        LIQUIBASE_DATABASE: ((LIQUIBASE_DATABASE))
+        LIQUIBASE_USERNAME: ((LIQUIBASE_USERNAME))
+        LIQUIBASE_PASSWORD: ((TRAIN_LIQUIBASE_PASSWORD))
+        LIQUIBASE_CHANGELOG: ((LIQUIBASE_CHANGELOG))
+        LIQUIBASE_LOGLEVEL: ((LIQUIBASE_LOGLEVEL))
+        LIQUIBASE_CLASSPATH: ((LIQUIBASE_CLASSPATH))
+        LIQUIBASE_DRIVER: ((LIQUIBASE_DRIVER))
+        CLIENTS: ((TRAIN_CLIENTS))
+        ENV: train
+      file: resource-devops.ci/tasks/deploy_postgres_db.yml
+      input_mapping: {CODE: stage}
+
+- name: deploy_prep_((PROJECT))_postgres_db
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: liquibase
+      - get: resource-data.architecture
+      - get: master
+        trigger: true
+    - task: resource-build-postgres-database
+      privileged: true
+      image: liquibase
+      params:
+        LOGLEVEL: ((LOGLEVEL))
+        GITREPONAME: ((PROJECT))
+        TYPE: ((BUILD_TYPE))
+        LIQUIBASE_PORT: ((LIQUIBASE_PORT))
+        LIQUIBASE_DATABASE: ((LIQUIBASE_DATABASE))
+        LIQUIBASE_USERNAME: ((LIQUIBASE_USERNAME))
+        LIQUIBASE_PASSWORD: ((PREP_LIQUIBASE_PASSWORD))
+        LIQUIBASE_CHANGELOG: ((LIQUIBASE_CHANGELOG))
+        LIQUIBASE_LOGLEVEL: ((LIQUIBASE_LOGLEVEL))
+        LIQUIBASE_CLASSPATH: ((LIQUIBASE_CLASSPATH))
+        LIQUIBASE_DRIVER: ((LIQUIBASE_DRIVER))
+        CLIENTS: ((PREP_CLIENTS))
+        ENV: prep
+      file: resource-devops.ci/tasks/deploy_postgres_db.yml
+      input_mapping: {CODE: master}
+
+- name: deploy_production_((PROJECT))_postgres_db
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: liquibase
+      - get: resource-data.architecture
+      - get: master
+        passed: [deploy_prep_((PROJECT))_postgres_db]
+    - task: resource-build-postgres-database
+      privileged: true
+      image: liquibase
+      params:
+        LOGLEVEL: ((LOGLEVEL))
+        GITREPONAME: ((PROJECT))
+        TYPE: ((BUILD_TYPE))
+        LIQUIBASE_PORT: ((LIQUIBASE_PORT))
+        LIQUIBASE_DATABASE: ((LIQUIBASE_DATABASE))
+        LIQUIBASE_USERNAME: ((LIQUIBASE_USERNAME))
+        LIQUIBASE_PASSWORD: ((PROD_LIQUIBASE_PASSWORD))
+        LIQUIBASE_CHANGELOG: ((LIQUIBASE_CHANGELOG))
+        LIQUIBASE_LOGLEVEL: ((LIQUIBASE_LOGLEVEL))
+        LIQUIBASE_CLASSPATH: ((LIQUIBASE_CLASSPATH))
+        LIQUIBASE_DRIVER: ((LIQUIBASE_DRIVER))
+        CLIENTS: ((PROD_CLIENTS))
+        ENV: prod
+      file: resource-devops.ci/tasks/deploy_postgres_db.yml
+      input_mapping: {CODE: master}

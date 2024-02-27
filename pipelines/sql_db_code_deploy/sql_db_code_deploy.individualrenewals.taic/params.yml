@@ -1,0 +1,14 @@
+CI_VERSION: 2.0.197
+PROJECT: sql_db_code_deploy.individualrenewals.taic
+BUILD_TYPE: POSTGRES
+LOGLEVEL: ERROR
+TEAM_CHANNEL: data
+CLIENT: taic
+LIQUIBASE_PORT: 5432
+LIQUIBASE_DATABASE: individual_renewals
+LIQUIBASE_USERNAME: corvesta
+LIQUIBASE_CHANGELOG: changelog.xml
+LIQUIBASE_LOGLEVEL: info
+LIQUIBASE_CLASSPATH: /opt/jdbc/postgres-jdbc.jar
+LIQUIBASE_DRIVER: org.postgresql.Driver
+LIQUIBASE_DEBUG: unset

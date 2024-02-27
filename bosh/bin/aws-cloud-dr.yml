@@ -1,0 +1,84 @@
+---
+azs:
+- name: z1
+  cloud_properties: {availability_zone: us-west-2a}
+
+vm_types:
+- name: concourse_standalone
+  cloud_properties:
+    instance_type: m4.large
+    ephemeral_disk: {size: 10000, type: gp2}
+    elbs: [concourse-elb]
+    security_groups: [concourse-sg, boshdefault]
+- name: concourse_web
+  cloud_properties:
+    instance_type: m4.large
+    ephemeral_disk: {size: 10000, type: gp2}
+    elbs: [concourse-elb]
+    security_groups: [concourse-sg, boshdefault]
+- name: concourse_db
+  cloud_properties:
+    instance_type: m4.xlarge
+    ephemeral_disk: {size: 10000, type: gp2}
+    security_groups: [boshdefault]
+- name: concourse_worker
+  cloud_properties:
+    instance_type: m4.large
+    ephemeral_disk: {size: 100000, type: gp2}
+    security_groups: [boshdefault]
+- name: default
+  cloud_properties:
+    instance_type: t2.micro
+    ephemeral_disk: {size: 10000, type: gp2}
+    security_groups: [boshdefault]
+- name: large
+  cloud_properties:
+    instance_type: m4.large
+    ephemeral_disk: {size: 10000, type: gp2}
+    security_groups: [boshdefault]
+- name: vault-default
+  cloud_properties:
+    instance_type: t2.micro
+    ephemeral_disk: {size: 10000, type: gp2}
+    security_groups: [vault-sg, boshdefault]
+
+disk_types:
+- name: default
+  disk_size: 10000
+  cloud_properties: {type: gp2}
+- name: large
+  disk_size: 50_000
+  cloud_properties: {type: gp2}
+
+networks:
+- name: default
+  type: manual
+  subnets:
+  - range: 10.92.36.0/24
+    gateway: 10.92.36.1
+    az: z1
+    reserved: [10.92.36.1-10.92.36.5]
+    static: [10.92.36.6]
+    dns:
+    - 169.254.169.253    
+    cloud_properties: {subnet: subnet-0cdcd5866e3e3e67e}
+- name: ops_services
+  type: manual
+  subnets:
+  - range: 10.92.36.0/24
+    gateway: 10.92.36.1
+    az: z1
+    reserved: [10.92.36.1-10.92.36.5]
+    static: [10.92.36.7, 10.92.36.8,10.92.36.18, 10.92.36.16, 10.92.36.100, 10.92.36.101]
+    dns:
+    - 169.254.169.253
+    cloud_properties: {subnet: subnet-0cdcd5866e3e3e67e}
+- name: vip
+  type: vip
+
+compilation:
+  workers: 5
+  reuse_compilation_vms: true
+  az: z1
+  vm_type: large
+  network: default

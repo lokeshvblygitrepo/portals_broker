@@ -1,0 +1,8 @@
+CI_VERSION : 2.0.124
+TEAM_CHANNEL: devops-cicd
+CONTAINER_IMAGE: helloworld-django
+PROJECT: helloworld.django
+TERRAFORM_PROJECT: helloworld-django
+SERVICE_NAME: ecs_service
+SKIP_TEST: true
+DEPLOY: terraform_tfvars

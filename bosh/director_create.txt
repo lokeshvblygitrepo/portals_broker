@@ -1,0 +1,16 @@
+bosh delete-env bosh-deployment/bosh.yml \
+    --state=state.json \
+    --vars-store=creds.yml \
+    -o bosh-deployment/aws/cpi.yml \
+    -v director_name=mgmt \
+    -v internal_cidr=10.90.36.0/24 \
+    -v internal_gw=10.90.36.1 \
+    -v internal_ip=10.90.36.6 \
+    -v access_key_id=*** \
+    -v secret_access_key=*** \
+    -v region=us-east-1 \
+    -v az=us-east-1a \
+    -v default_key_name=bosh \
+    -v default_security_groups=[boshdefault] \
+    --var-file private_key=/Users/sflint/.ssh/bosh.pem \
+    -v subnet_id=subnet-51aaf07e

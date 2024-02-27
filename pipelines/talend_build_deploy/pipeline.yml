@@ -1,0 +1,545 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: git-bitbucket-pr
+  type: docker-image
+  source:
+    repository: zarplata/concourse-git-bitbucket-pr-resource
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  tags: [talend]
+  source:
+    url: ((slack_channel))
+
+- name: resource-devops.ci
+  type: git
+  check_every: 10m
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    uri: git@bitbucket.org:corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    private_key: ((bitbucket-ssh))
+
+- name: resource-master-repo
+  type: git
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    uri: git@bitbucket.org:corvesta/((MASTER_REPO)).git
+    branch: master
+    private_key: ((bitbucket-ssh))
+
+- name: dev
+  type: git
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT)).git
+    branch: develop
+    private_key: ((bitbucket-ssh))
+
+- name: qa
+  type: git
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT)).git
+    branch: qa
+    private_key: ((bitbucket-ssh))
+
+- name: stage
+  type: git
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT)).git
+    branch: stage
+    private_key: ((bitbucket-ssh))
+
+- name: master
+  type: git
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    uri: git@bitbucket.org:corvesta/((PROJECT)).git
+    branch: master
+    private_key: ((bitbucket-ssh))
+
+- name: nomad_alert
+  type: git
+  check_timeout: 5m
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.infra.nomad_alert.git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: nomad_deploy
+  type: docker-image
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/nomad-cli
+    tag: 0.0.2
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+
+- name: resource-build-talend
+  type: docker-image
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/talend
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+    tag: 0.0.5
+
+- name: resource-xpath
+  type: docker-image
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/xpath
+    tag: 1.0.2
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: ecr-((CONTAINER_IMAGE))
+  type: docker-image
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/((CONTAINER_IMAGE))
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: ecr-dr-((CONTAINER_IMAGE))
+  type: docker-image
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    repository: 038131160342.dkr.ecr.us-west-2.amazonaws.com/((CONTAINER_IMAGE))
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: DEV_CONSUL_TOKEN
+  type: s3
+  check_every: 10m
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    bucket: cv-dev-consul
+    versioned_file: tokens/kv-write
+    access_key_id: ((DEV_AWS_ACCESS_KEY_ID))
+    secret_access_key: ((DEV_AWS_SECRET_ACCESS_KEY))
+
+- name: QA_CONSUL_TOKEN
+  type: s3
+  check_every: 10m
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    bucket: cv-qa-consul
+    versioned_file: tokens/kv-write
+    access_key_id: ((QA_AWS_ACCESS_KEY_ID))
+    secret_access_key: ((QA_AWS_SECRET_ACCESS_KEY))
+
+- name: STAGE_CONSUL_TOKEN
+  type: s3
+  check_every: 10m
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    bucket: cv-stage-consul
+    versioned_file: tokens/kv-write
+    access_key_id: ((STAGE_AWS_ACCESS_KEY_ID))
+    secret_access_key: ((STAGE_AWS_SECRET_ACCESS_KEY))
+
+- name: TRAIN_CONSUL_TOKEN
+  type: s3
+  check_every: 10m
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    bucket: cv-train-consul
+    versioned_file: tokens/kv-write
+    access_key_id: ((TRAIN_AWS_ACCESS_KEY_ID))
+    secret_access_key: ((TRAIN_AWS_SECRET_ACCESS_KEY))
+
+- name: PREP_CONSUL_TOKEN
+  type: s3
+  check_every: 10m
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    bucket: cv-prep-consul
+    versioned_file: tokens/kv-write
+    access_key_id: ((PREP_AWS_ACCESS_KEY_ID))
+    secret_access_key: ((PREP_AWS_SECRET_ACCESS_KEY))
+
+- name: PROD_CONSUL_TOKEN
+  type: s3
+  check_every: 10m
+  check_timeout: 5m
+  tags: [talend]
+  source:
+    bucket: cv-prod-consul
+    versioned_file: tokens/kv-write
+    access_key_id: ((PROD_AWS_ACCESS_KEY_ID))
+    secret_access_key: ((PROD_AWS_SECRET_ACCESS_KEY))
+
+groups:
+- name: development
+  jobs:
+  - build_talend_container_from_dev
+  - deploy_container_to_dev
+
+- name: test
+  jobs:
+  - deploy_container_to_qa
+
+- name: stage
+  jobs:
+  - deploy_container_to_stage
+  - deploy_container_to_training
+
+- name: prod
+  jobs:
+  - deploy_container_to_preprod
+  - deploy_container_to_production
+
+jobs:
+- name: build_talend_container_from_dev
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [talend]
+      - get: resource-build-talend
+        tags: [talend]
+      - get: dev
+        trigger: true
+        tags: [talend]
+      - get: nomad_alert
+        tags: [node]
+      - get: resource-master-repo
+        tags: [talend]
+      - get: resource-xpath
+        tags: [talend]
+    - task: build-java-talend-artifact
+      privileged: true
+      tags: [talend]
+      image: resource-build-talend
+      params:
+        ARTIFACTORYPASSWORD: ((ARTIFACTORYPASSWORD))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        TYPE: ((BUILD_TYPE))
+        LOGLEVEL: ((LOGLEVEL))
+        SKIP_TEST: ((SKIP_TEST))
+        FILTER: ((FILTER))
+        CONTAINER_TAGS: ((CONTAINER_TAGS))
+      file: resource-devops.ci/tasks/task_build_talend.yml
+      input_mapping: {source_code: dev, master_code: resource-master-repo}
+      on_success:
+        do:
+          - put: ecr-((CONTAINER_IMAGE))
+            params:
+              build: code_build
+              input: code_build
+              tag: code_build/commit.txt
+              additional_tags: code_build/additonal_tags.txt
+            get_params: { skip_download: true }
+          - put: ecr-dr-((CONTAINER_IMAGE))
+            params:
+              build: code_build
+              input: code_build
+              tag: code_build/commit.txt
+              additional_tags: code_build/additonal_tags.txt
+            get_params: { skip_download: true }
+
+    - task: veracode-upload
+      privileged: true
+      tags: [talend]
+      image: resource-xpath
+      file: resource-devops.ci/tasks/task_upload_verracode.yml
+      input_mapping: {code_build: code_build, resource-devops.ci: resource-devops.ci}
+      params:
+        VERRACODE_APP: NA
+        VERRACODE_PASSWORD: ((VERRACODE_PASSWORD))
+
+
+- name: deploy_container_to_dev
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: DEV_CONSUL_TOKEN
+        tags: [talend]
+      - get: resource-devops.ci
+        tags: [talend]
+      - get: nomad_deploy
+        tags: [talend]
+      - get: dev
+        tags: [talend]
+      - get: nomad_alert
+        tags: [talend]
+      - get: ecr-((CONTAINER_IMAGE))
+        trigger: true
+        tags: [talend]
+        params:
+          get_params: { skip_download: true }
+    - task: nomad-deploy-to-dev
+      privileged: true
+      tags: [talend]
+      image: nomad_deploy
+      file: resource-devops.ci/tasks/((DEPLOY_DEV)).yml
+      input_mapping:
+        source_code: dev
+        consultoken: DEV_CONSUL_TOKEN
+      params:
+        ENV: dev
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ENV_AWS_SECRET_ACCESS_KEY: ((DEV_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((DEV_AWS_ACCESS_KEY_ID))
+        TERRAFORM_ENV: development
+
+- name: deploy_container_to_qa
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: QA_CONSUL_TOKEN
+        tags: [talend]
+      - get: resource-devops.ci
+        tags: [talend]
+      - get: nomad_deploy
+        tags: [talend]
+      - get: nomad_alert
+        tags: [talend]
+      - get: qa
+        tags: [talend]
+        trigger: true
+    - task: nomad-deploy-to-qa
+      privileged: true
+      tags: [talend]
+      image: nomad_deploy
+      file: resource-devops.ci/tasks/((DEPLOY_QA)).yml
+      input_mapping:
+        source_code: qa
+        consultoken: QA_CONSUL_TOKEN
+      params:
+        ENV: qa
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ENV_AWS_SECRET_ACCESS_KEY: ((QA_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((QA_AWS_ACCESS_KEY_ID))
+        TERRAFORM_ENV: qa
+
+- name: deploy_container_to_stage
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: STAGE_CONSUL_TOKEN
+        tags: [talend]
+      - get: resource-devops.ci
+        tags: [talend]
+      - get: nomad_deploy
+        tags: [talend]
+      - get: nomad_alert
+        tags: [talend]
+      - get: stage
+        tags: [talend]
+        trigger: true
+    - task: nomad-deploy-to-stage
+      privileged: true
+      tags: [talend]
+      image: nomad_deploy
+      file: resource-devops.ci/tasks/((DEPLOY_STAGE)).yml
+      input_mapping:
+        source_code: stage
+        consultoken: STAGE_CONSUL_TOKEN
+      params:
+        ENV: stage
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ENV_AWS_SECRET_ACCESS_KEY: ((STAGE_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((STAGE_AWS_ACCESS_KEY_ID))
+        TERRAFORM_ENV: staging
+
+- name: deploy_container_to_training
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: TRAIN_CONSUL_TOKEN
+        tags: [talend]
+      - get: resource-devops.ci
+        tags: [talend]
+      - get: nomad_deploy
+        tags: [talend]
+      - get: nomad_alert
+        tags: [talend]
+      - get: stage
+        tags: [talend]
+        trigger: true
+        passed: [deploy_container_to_stage]
+    - task: nomad-deploy-to-train
+      privileged: true
+      tags: [talend]
+      image: nomad_deploy
+      file: resource-devops.ci/tasks/((DEPLOY_TRAIN)).yml
+      input_mapping:
+        source_code: stage
+        consultoken: TRAIN_CONSUL_TOKEN
+      params:
+        ENV: train
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ENV_AWS_SECRET_ACCESS_KEY: ((TRAIN_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((TRAIN_AWS_ACCESS_KEY_ID))
+        TERRAFORM_ENV: training
+
+- name: deploy_container_to_preprod
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: PREP_CONSUL_TOKEN
+        tags: [talend]
+      - get: resource-devops.ci
+        tags: [talend]
+      - get: nomad_deploy
+        tags: [talend]
+      - get: nomad_alert
+        tags: [talend]
+      - get: master
+        tags: [talend]
+        trigger: true
+    - task: nomad-deploy-to-preprod
+      privileged: true
+      tags: [talend]
+      image: nomad_deploy
+      file: resource-devops.ci/tasks/((DEPLOY_PREP)).yml
+      input_mapping:
+        source_code: master
+        consultoken: PREP_CONSUL_TOKEN
+      params:
+        ENV: prep
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ENV_AWS_SECRET_ACCESS_KEY: ((PREP_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((PREP_AWS_ACCESS_KEY_ID))
+        TERRAFORM_ENV: preprod
+
+- name: deploy_container_to_production
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: PROD_CONSUL_TOKEN
+        tags: [talend]
+      - get: resource-devops.ci
+        tags: [talend]
+      - get: nomad_deploy
+        tags: [talend]
+      - get: nomad_alert
+        tags: [talend]
+      - get: master
+        tags: [talend]
+        passed: [deploy_container_to_preprod]
+    - task: nomad-deploy-to-train
+      privileged: true
+      tags: [talend]
+      image: nomad_deploy
+      file: resource-devops.ci/tasks/((DEPLOY_PROD)).yml
+      input_mapping:
+        source_code: master
+        consultoken: PROD_CONSUL_TOKEN
+      params:
+        ENV: prod
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        ENV_AWS_SECRET_ACCESS_KEY: ((PROD_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((PROD_AWS_ACCESS_KEY_ID))
+        TERRAFORM_ENV: prod
+
+
+### NEED TO ADD PR CHECK FOR PIPELINE #####

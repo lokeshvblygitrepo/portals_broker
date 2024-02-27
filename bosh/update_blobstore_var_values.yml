@@ -1,0 +1,17 @@
+# update_blobstore_var_values.yml
+
+---
+- type: replace
+  path: /blobstore_server_tls
+  value: ((blobstore_server_tls_2))
+
+- type: replace
+  path: /blobstore_ca
+  value: ((blobstore_ca_2))
+
+- type: remove
+  path: /blobstore_ca_2
+
+- type: remove
+  path: /blobstore_server_tls_2
+

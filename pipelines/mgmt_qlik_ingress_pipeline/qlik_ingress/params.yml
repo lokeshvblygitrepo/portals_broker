@@ -1,0 +1,5 @@
+CI_VERSION : 2.0.153
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.infra.qlik_ingress
+TERRAFORM_PROJECT: qlik-ingress-nlb
+DEPLOY: terraform_pipeline_qlik_nlbs

@@ -1,0 +1,267 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+    get_params: { skip_download: true }
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: ((TEAM_CHANNEL))
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <http://concoursecinew.mgmt.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+    get_params: { skip_download: true }
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  tags: [node]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/slack-notification-resource
+    tag: latest
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: git-bitbucket-pr
+  type: docker-image
+  tags: [node]
+  source:
+    repository: zarplata/concourse-git-bitbucket-pr-resource
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  tags: [node]
+  source:
+    url: ((slack_channel))
+
+- name: resource-devops.ci
+  type: git
+  check_timeout: 5m
+  check_every: 10m
+  tags: [node]
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: DEV
+  type: git
+  check_timeout: 5m
+  tags: [node]
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: develop
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: QA
+  type: git
+  check_timeout: 5m
+  tags: [node]
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: qa
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: MASTER
+  type: git
+  check_timeout: 5m
+  tags: [node]
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: resource-veracode
+  type: docker-image
+  check_timeout: 5m
+  tags: [node]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourse-veracode
+    tag: 0.0.1
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: resource-build-node
+  type: docker-image
+  check_timeout: 5m
+  tags: [node]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourseci-build-java
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+    tag: 1.0.1
+
+- name: Terraform Deploy
+  type: docker-image
+  check_timeout: 5m
+  tags: [node]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/concourseci-deploy
+    tag: 0.13.3
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+- name: ecr-((CONTAINER_IMAGE))
+  type: docker-image
+  check_timeout: 5m
+  tags: [node]
+  source:
+    repository: 038131160342.dkr.ecr.us-east-1.amazonaws.com/((CONTAINER_IMAGE))
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+groups:
+- name: development
+  jobs:
+  - build ((TERRAFORM_PROJECT)) DEV container and upload to veracode
+
+- name: test
+  jobs:
+  - Promote ((TERRAFORM_PROJECT)) MGMT QA and Deploy
+
+- name: mgmt
+  jobs:
+  - Promote ((TERRAFORM_PROJECT)) MGMT and Deploy
+
+
+jobs:
+- name: build ((TERRAFORM_PROJECT)) DEV container and upload to veracode
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [node]
+      - get: resource-veracode
+        tags: [node]
+      - get: resource-build-node
+        tags: [node]
+      - get: DEV
+        trigger: true
+        tags: [node]
+    - task: build-node-artifact
+      privileged: true
+      tags: [node]
+      image: resource-build-node
+      params:
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+      file: resource-devops.ci/tasks/task_build_docker.yml
+      input_mapping: {CODE: DEV}
+      on_success:
+        put: ecr-((CONTAINER_IMAGE))
+        tags: [node]
+        params:
+          build: code_build
+          input: code_build
+          tag: code_build/commit.txt
+        get_params: { skip_download: true }
+
+
+    - task: veracode-upload
+      privileged: true
+      tags: [node]
+      image: resource-veracode
+      file: resource-devops.ci/tasks/task_upload_verracode.yml
+      input_mapping: {code_build: code_build, resource-devops.ci: resource-devops.ci}
+      params:
+        VERRACODE_APP: ((PROJECT))
+        VERRACODE_PASSWORD: ((VERRACODE_PASSWORD))
+        VERACODE_API_KEY_ID: ((VERACODE_API_KEY_ID))
+        VERACODE_API_KEY_SECRET: ((VERACODE_API_KEY_SECRET))
+        TYPE: ((BUILD_TYPE))
+
+- name: Promote ((TERRAFORM_PROJECT)) MGMT QA and Deploy
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+        tags: [node]
+      - get: Terraform Deploy
+        tags: [node]
+      - get: QA
+        trigger: true
+        tags: [node]
+    - task: deploy-container-to-qa
+      privileged: true
+      tags: [node]
+      image: Terraform Deploy
+      file: resource-devops.ci/tasks/terraform_deploy_node.yml
+      input_mapping: {CODE: QA}
+      params:
+        TERRAFORM_ENV: mgmt-qa
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: DEPRECATED
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        PROJECT: ((PROJECT))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))
+
+- name: Promote ((TERRAFORM_PROJECT)) MGMT and Deploy
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: QA
+        passed: [Promote ((TERRAFORM_PROJECT)) MGMT QA and Deploy]
+        params:
+          get_params: { skip_download: true }
+      - get: resource-devops.ci
+        tags: [node]
+      - get: Terraform Deploy
+        tags: [node]
+      - get: MASTER
+        trigger: true
+        tags: [node]
+    - task: deploy-container-to-mgmt
+      privileged: true
+      tags: [node]
+      image: Terraform Deploy
+      file: resource-devops.ci/tasks/terraform_deploy_node.yml
+      input_mapping: {CODE: MASTER}
+      params:
+        TERRAFORM_ENV: mgmt
+        TERRAFORM_PROJECT: ((TERRAFORM_PROJECT))
+        CONTAINER_IMAGE: ((CONTAINER_IMAGE))
+        TERRAFORM_VERSION: DEPRECATED
+        SERVICE_NAME: ((SERVICE_NAME))
+        MGMT_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        MGMT_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        ENV_AWS_SECRET_ACCESS_KEY: ((MGMT_AWS_SECRET_ACCESS_KEY))
+        ENV_AWS_ACCESS_KEY_ID: ((MGMT_AWS_ACCESS_KEY_ID))
+        GIT_USERNAME: ((bitbucket-username))
+        GIT_PASSWORD: ((bitbucket-apppassword))
+        PROJECT: ((PROJECT))
+        DATADOG_API_KEY: ((DATADOG_API_KEY))
+        DATADOG_APP_KEY: ((DATADOG_APP_KEY))

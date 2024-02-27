@@ -1,0 +1,5 @@
+CI_VERSION : 2.0.126
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.tools.s3presigned
+TERRAFORM_PROJECT: b2b
+DEPLOY: terraform_pipeline

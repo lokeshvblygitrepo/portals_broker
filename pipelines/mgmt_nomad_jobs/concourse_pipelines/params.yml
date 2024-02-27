@@ -1,0 +1,7 @@
+CI_VERSION : 2.0.151
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.concourse_pipeline
+CONTAINER_IMAGE: nomad-concourse-pipeline
+SERVICE_NAME: nomad_service
+BUILD_TYPE: NOMAD_SERVICE
+CONTAINER_TAGS: nomad

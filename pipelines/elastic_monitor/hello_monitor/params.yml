@@ -1,0 +1,11 @@
+
+CI_VERSION : 2.0.103
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.es.monitor
+DEV_ES_DOMAIN_URL: vpc-dev-logs-l37rjnums6wcop3hnhtmjmftmy.us-east-1.es.amazonaws.com
+SAND_ES_DOMAIN_URL: vpc-sand-logs-mtsand4fqaytxaye657cxthpza.us-east-1.es.amazonaws.com
+QA_ES_DOMAIN_URL: vpc-qa-logs-krnsr7kwfkxy7ioa5molzkygge.us-east-1.es.amazonaws.com
+STAGE_ES_DOMAIN_URL: vpc-stage-logs-bgn2eyxzzzqchpju2muxmokh3a.us-east-1.es.amazonaws.com
+TRAIN_ES_DOMAIN_URL: vpc-train-logs-42xf2pex6dacszmiaemfpzoena.us-east-1.es.amazonaws.com
+PREP_ES_DOMAIN_URL: vpc-prep-logs-njo5judwvzxnkele742cu2sl2e.us-east-1.es.amazonaws.com
+PROD_ES_DOMAIN_URL: vpc-prod-logs-4xb5c43l46xqtz74waar6hreyq.us-east-1.es.amazonaws.com

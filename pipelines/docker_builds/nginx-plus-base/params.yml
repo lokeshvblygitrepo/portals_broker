@@ -1,0 +1,3 @@
+TEAM_CHANNEL: devops-cicd
+PROJECT: devops.nginx.base
+CONTAINER_IMAGE: nginx-plus

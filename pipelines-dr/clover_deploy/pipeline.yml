@@ -1,0 +1,91 @@
+---
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The CI DR  <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+
+  - &success-alert
+    put: slack-alert
+    params:
+      channel: drdeploy
+      always_notify: true
+      username: "Concource CI"
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The CI DR <http://concourseci.mgmt-dr.corvesta.net/teams/developer/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+resources:
+
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: ((slack_channel))
+    
+- name: resource-devops.ci
+  type: git
+  source:
+    uri:  https://bitbucket.org/corvesta/devops.ci.git
+    branch: ((CI_VERSION))
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: MASTER
+  type: git
+  source:
+    uri: https://bitbucket.org/corvesta/((PROJECT)).git
+    branch: master
+    username: ((bitbucket-username))
+    password: ((bitbucket-apppassword))
+
+- name: Terraform Deploy
+  type: docker-image
+  source:
+    repository: 038131160342.dkr.ecr.us-west-2.amazonaws.com/concourseci-deploy
+    tag: 0.12.4
+    aws_secret_access_key: ((MGMT_AWS_SECRET_ACCESS_KEY))
+    aws_access_key_id: ((MGMT_AWS_ACCESS_KEY_ID))
+
+groups:
+- name: production
+  jobs:
+  - Deploy ((PROJECT)) to Master PROD DR
+
+jobs:
+- name: Deploy ((PROJECT)) to Master PROD DR
+  on_success: *success-alert
+  on_failure: *failure-alert
+  public: true
+  plan:
+    - in_parallel:
+      - get: resource-devops.ci
+      - get: Terraform Deploy
+      - get: MASTER
+        trigger: true
+    - task: terraform-deploy-clover-to-master
+      privileged: true
+      image: Terraform Deploy
+      file: resource-devops.ci/tasks/terraform_deploy_clover.yml
+      input_mapping: {source_code: MASTER}
+      params:
+        CLOVER_SERVER: redecated
+        ENV: MASTER
+        CONTAINER_NAME: ((CONTAINER_IMAGE))
+        TERRAFORM_PEM: ((TERRAFORM_MGMT_PEM))
+        TEAM: ((TEAM))
+        CLOVER_ENV: mgmt-dr
